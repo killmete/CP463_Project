@@ -1,7 +1,6 @@
 import sys
 from pathlib import Path
 
-from conftest import CLIP_FRAMES
 from drowsiness import app as app_module
 from drowsiness.app import FpsMeter, main, run_loop
 from drowsiness.capture import CameraError, FrameSource, VideoFileSource
@@ -16,10 +15,10 @@ def test_run_loop_processes_frames_headless(synthetic_clip: Path):
     assert 0 <= stats.latency_p50_ms <= stats.latency_p95_ms
 
 
-def test_run_loop_stops_at_end_of_stream(synthetic_clip: Path):
+def test_run_loop_stops_at_end_of_stream(synthetic_clip: Path, clip_spec):
     with VideoFileSource(synthetic_clip) as source:
         stats = run_loop(source, load_config(), display=False)
-    assert stats.frames == CLIP_FRAMES
+    assert stats.frames == clip_spec.frames
 
 
 def test_main_smoke(synthetic_clip: Path):
@@ -53,6 +52,19 @@ def test_main_fails_when_live_camera_is_lost(monkeypatch):
 
     monkeypatch.setattr(app_module, "open_source", lambda cfg: LostCamera())
     assert main(["--source", "0", "--no-display"]) == 1
+
+
+def test_ctrl_c_stops_cleanly_with_stats(synthetic_clip: Path):
+    class InterruptAfterFive(VideoFileSource):
+        def read(self):
+            if self._index == 5:
+                raise KeyboardInterrupt
+            return super().read()
+
+    with InterruptAfterFive(synthetic_clip) as source:
+        stats = run_loop(source, load_config(), display=False)
+    assert stats.interrupted
+    assert stats.frames == 5
 
 
 def test_fps_meter():

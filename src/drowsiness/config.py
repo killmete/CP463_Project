@@ -1,7 +1,8 @@
 """Load and validate the YAML configuration into frozen dataclasses.
 
-`config/default.yaml` is the single source of default values. A user config
-(or CLI overrides) is deep-merged on top of it, then every key is validated:
+`default_config.yaml` (shipped inside the package) is the single source of default
+values. A user config (or CLI overrides) is deep-merged on top of it, then every key
+is validated:
 unknown keys, missing keys and wrong types raise `ConfigError`.
 """
 
@@ -17,7 +18,7 @@ from typing import Any
 
 import yaml
 
-DEFAULT_CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "default.yaml"
+DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent / "default_config.yaml"
 
 CAMERA_BACKENDS = ("auto", "msmf", "dshow", "any")
 
@@ -35,6 +36,7 @@ class CaptureConfig:
     fps: float
     buffer_size: int
     read_timeout_s: float
+    fps_override: float | None
 
 
 @dataclass(frozen=True, slots=True)

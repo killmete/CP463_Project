@@ -27,7 +27,7 @@ measurable.
   (label start -> alert), false alarms per hour of normal driving, per-frame
   latency and FPS. Report as a Markdown table in `eval/reports/`.
 - Threshold tuning: grid/ROC search over EAR ratio, closure duration, PERCLOS,
-  MAR, yaw/pitch limits; propose new defaults for `config/default.yaml` to
+  MAR, yaw/pitch limits; propose new defaults for `src/drowsiness/default_config.yaml` to
   `detection-logic-engineer` with evidence.
 - Optional ML (phase 2): small CNN eye-state / yawn classifier as an alternative
   feature source; must beat the EAR/MAR baseline on held-out subjects and stay

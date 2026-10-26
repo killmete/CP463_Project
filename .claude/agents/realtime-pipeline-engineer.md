@@ -19,7 +19,7 @@ capture -> perception -> logic -> alerts run smoothly at 20-30 FPS.
   processing always works on the newest frame and latency never accumulates.
 - `app.py` - main loop and CLI (`python -m drowsiness --source 0 --config ...`,
   `--source path/to/video.mp4`, `--no-display`, `--log-features out.csv`).
-- `config.py` - load/validate `config/default.yaml` (dataclass or pydantic).
+- `config.py` - load/validate `src/drowsiness/default_config.yaml` (dataclass or pydantic).
 - Instrumentation: rolling FPS, per-stage latency (capture, perception, logic,
   alert) shown in the overlay and logged; `--benchmark` mode printing p50/p95.
 
