@@ -19,11 +19,13 @@ You are the detection-logic engineer. Input: a time-ordered stream of
 - `rules.py` - the individual detectors (defaults in `config/default.yaml`):
   | Condition | Default rule |
   |---|---|
-  | Microsleep / eyes closed | eyes closed continuously >= 1.5 s |
-  | PERCLOS drowsiness | % time eyes closed over 60 s window >= 15 % (warn), >= 25 % (alarm) |
+  | Microsleep | eyes closed continuously >= 1.5 s -> warning |
+  | Sleep | eyes closed continuously > 3 s -> alarm (Euro NCAP) |
+  | PERCLOS drowsiness | P80: % time eyes >= 80 % closed over 60 s window; >= 15 % warn, >= 25 % alarm |
   | Yawning | MAR > threshold for >= 1.0 s; >= 3 yawns in 5 min -> drowsy warning |
   | Head nodding | pitch drops > 15-20 deg below neutral for >= 1 s, or repeated nods |
-  | Inattention / looking away | abs(yaw) > 30 deg or abs(pitch) > 25 deg off neutral for >= 2 s |
+  | Long distraction | abs(yaw) > 30 deg or abs(pitch) > 25 deg off neutral (or gaze off-road) for >= 3 s (Euro NCAP) |
+  | Short distraction | >= 10 s off-road in total within a 30 s window (Euro NCAP) |
   | No face | face not found >= 2 s -> NO_FACE (possible looking away / occlusion) |
   | Blink rate (optional) | abnormal blink rate/long blink duration as early sign |
 - `state_machine.py` - combines detectors into states
@@ -38,6 +40,9 @@ You are the detection-logic engineer. Input: a time-ordered stream of
 - Handle missing values (`None`) explicitly; dropped frames must not reset
   timers incorrectly (use timestamps; tolerate gaps up to ~0.3 s).
 - Every threshold comes from config; document its meaning and source
-  (literature or our tuning results from `data-eval-engineer`).
+  (`docs/literature-review.md` or our tuning results from
+  `data-eval-engineer`). For PERCLOS-P80, eyes count as closed when
+  EAR < closed + 0.2 x (open - closed), using the calibrated open/closed
+  EAR.
 - Write table-driven tests for each rule in `tests/logic/` with synthetic
   feature sequences (e.g. "eyes closed 1.4 s -> no alert, 1.6 s -> alert").
