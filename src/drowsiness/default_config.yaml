@@ -10,6 +10,7 @@ capture:
   fps: 30.0
   buffer_size: 1         # driver-side buffer; we always process the newest frame
   read_timeout_s: 1.0    # camera gives no frame for this long -> error (never a silent stop)
+  fps_override: null     # video files only: real frame rate if the file reports a wrong one
 
 runtime:
   display: true

@@ -43,14 +43,14 @@ FrameSource ──(frame, t)──▶ Perception ──FrameFeatures──▶ Lo
 ```
 src/drowsiness/
   types.py          # shared contracts – owned by system-architect
-  config.py         # loads config/default.yaml
+  config.py         # loads default_config.yaml (+ user YAML)
   app.py            # main loop + CLI  (python -m drowsiness)
   capture/          # FrameSource: CameraSource, VideoFileSource
   perception/       # LandmarkDetector, features.py (EAR/MAR/pose/gaze)
   logic/            # calibration, signals, rules, state_machine
   alerts/           # AlertManager, sinks, messages
   ui/               # overlay drawing
-config/default.yaml # ALL thresholds
+  default_config.yaml  # ALL thresholds (packaged with the code)
 eval/               # evaluation scripts, labels, reports
 tests/              # unit, replay, perf
 data/, models/      # gitignored
@@ -78,7 +78,7 @@ Changing these requires `system-architect` sign-off and updating every caller.
 ## Core rules
 - Logic is time-based (seconds), never frame counts.
 - Perception is stateless per frame; logic is pure (no I/O); alerts never decide.
-- Thresholds live in `config/default.yaml`.
+- Thresholds live in `src/drowsiness/default_config.yaml`.
 - Nothing blocking on the frame loop. Budget: < 50 ms per frame, alert within
   ~0.5 s of a rule firing.
 - Never commit datasets, model weights, secrets, or face recordings of people.

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import time
 from pathlib import Path
 
@@ -10,11 +11,20 @@ import cv2
 from drowsiness.capture.base import FrameSource
 from drowsiness.types import FramePacket
 
-DEFAULT_FPS = 30.0
+log = logging.getLogger(__name__)
+
+# Containers sometimes report a time base (e.g. 1000 or 90000) instead of a frame rate,
+# or nothing. Timestamps drive the timing rules, so refuse to guess outside this range.
+MIN_PLAUSIBLE_FPS = 1.0
+MAX_PLAUSIBLE_FPS = 240.0
 
 
 class VideoFileSource(FrameSource):
-    """Reads every frame in order (no dropping). timestamp = index / fps."""
+    """Reads every frame in order (no dropping). timestamp = index / fps.
+
+    Assumes constant frame rate. For variable-frame-rate clips (e.g. phone recordings),
+    re-encode to a constant rate first or set `fps_override`.
+    """
 
     def __init__(self, path: str | Path, fps_override: float | None = None) -> None:
         self.path = Path(path)
@@ -29,8 +39,19 @@ class VideoFileSource(FrameSource):
         cap = cv2.VideoCapture(str(self.path))
         if not cap.isOpened():
             raise OSError(f"cannot open video file: {self.path}")
+        if self._fps_override is not None:
+            fps = self._fps_override
+        else:
+            fps = cap.get(cv2.CAP_PROP_FPS)
+            if not MIN_PLAUSIBLE_FPS <= fps <= MAX_PLAUSIBLE_FPS:
+                cap.release()
+                raise OSError(
+                    f"{self.path} reports {fps:g} fps, outside {MIN_PLAUSIBLE_FPS:g}-"
+                    f"{MAX_PLAUSIBLE_FPS:g}; set capture.fps_override to the real frame rate"
+                )
+        log.info("video %s: %.2f fps%s", self.path, fps, " (override)" * bool(self._fps_override))
         self._cap = cap
-        self._fps = self._fps_override or cap.get(cv2.CAP_PROP_FPS) or DEFAULT_FPS
+        self._fps = fps
         self._index = 0
 
     def read(self) -> FramePacket | None:

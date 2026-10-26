@@ -41,7 +41,7 @@ at 20–30 FPS. Output: an alert message when the driver is drowsy or inattentiv
   ~0.5 s of the rule condition being met.
 - Fail safe and visible: if no face is detected for a sustained period, that is
   its own state (`NO_FACE`), not silently "OK".
-- Thresholds live in `config/default.yaml`, not in code.
+- Thresholds live in `src/drowsiness/default_config.yaml`, not in code.
 
 ## Output format
 Return a short plan in Markdown: Summary → Contract changes → Task list

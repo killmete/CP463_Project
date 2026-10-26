@@ -16,7 +16,7 @@ You are the detection-logic engineer. Input: a time-ordered stream of
   fallbacks from config if calibration is skipped.
 - `signals.py` - smoothing (EMA / median over ~3 frames) and sliding windows
   keyed by timestamp, not frame index.
-- `rules.py` - the individual detectors (defaults in `config/default.yaml`):
+- `rules.py` - the individual detectors (defaults in `src/drowsiness/default_config.yaml`):
   | Condition | Default rule |
   |---|---|
   | Microsleep | eyes closed continuously >= 1.5 s -> warning |

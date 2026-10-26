@@ -34,6 +34,7 @@ class RunStats:
     latency_p50_ms: float
     latency_p95_ms: float
     dropped_frames: int
+    interrupted: bool = False
 
 
 class FpsMeter:
@@ -72,27 +73,34 @@ def run_loop(
     last_latency_ms = 0.0
     start = time.perf_counter()
 
-    while max_frames is None or len(latencies_ms) < max_frames:
-        packet = source.read()
-        if packet is None:
-            break
+    interrupted = False
 
-        # M2+: features = perception.process(packet); state = logic.update(features); ...
-
-        fps = fps_meter.tick(time.perf_counter())
-        if display:
-            draw_overlay(packet.image, fps, last_latency_ms, cfg.runtime.latency_budget_ms)
-            cv2.imshow(WINDOW_NAME, packet.image)
-            key = cv2.waitKey(1) & 0xFF
-            if key in _QUIT_KEYS or cv2.getWindowProperty(WINDOW_NAME, cv2.WND_PROP_VISIBLE) < 1:
+    try:
+        while max_frames is None or len(latencies_ms) < max_frames:
+            packet = source.read()
+            if packet is None:
                 break
 
-        last_latency_ms = (time.perf_counter() - packet.grabbed_at) * 1000.0
-        latencies_ms.append(last_latency_ms)
+            # M2+: features = perception.process(packet); state = logic.update(features); ...
+
+            fps = fps_meter.tick(time.perf_counter())
+            if display:
+                draw_overlay(packet.image, fps, last_latency_ms, cfg.runtime.latency_budget_ms)
+                cv2.imshow(WINDOW_NAME, packet.image)
+                key = cv2.waitKey(1) & 0xFF
+                visible = cv2.getWindowProperty(WINDOW_NAME, cv2.WND_PROP_VISIBLE)
+                if key in _QUIT_KEYS or visible < 1:
+                    break
+
+            last_latency_ms = (time.perf_counter() - packet.grabbed_at) * 1000.0
+            latencies_ms.append(last_latency_ms)
+    except KeyboardInterrupt:
+        interrupted = True  # Ctrl+C: stop cleanly and still report stats
+    finally:
+        if display:
+            cv2.destroyAllWindows()
 
     duration = time.perf_counter() - start
-    if display:
-        cv2.destroyAllWindows()
     frames = len(latencies_ms)
     return RunStats(
         frames=frames,
@@ -101,6 +109,7 @@ def run_loop(
         latency_p50_ms=float(np.percentile(latencies_ms, 50)) if frames else 0.0,
         latency_p95_ms=float(np.percentile(latencies_ms, 95)) if frames else 0.0,
         dropped_frames=source.dropped_frames,
+        interrupted=interrupted,
     )
 
 
@@ -145,10 +154,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     except cv2.error as e:
         log.error("OpenCV error: %s (headless OpenCV? try --no-display)", e)
         return 1
-    except KeyboardInterrupt:
+    except KeyboardInterrupt:  # while opening the source, before the loop started
         log.info("interrupted")
         return 0
 
+    if stats.interrupted:
+        log.info("interrupted")
     log.info(
         "processed %d frames in %.1f s: %.1f fps, latency p50 %.1f ms / p95 %.1f ms, %d dropped",
         stats.frames,

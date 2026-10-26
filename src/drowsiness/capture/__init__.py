@@ -26,4 +26,4 @@ def open_source(cfg: CaptureConfig) -> FrameSource:
             buffer_size=cfg.buffer_size,
             read_timeout_s=cfg.read_timeout_s,
         )
-    return VideoFileSource(source)
+    return VideoFileSource(source, fps_override=cfg.fps_override)
