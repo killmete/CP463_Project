@@ -17,8 +17,18 @@ End-to-end deep video models were rejected: too slow on CPU, and their
 reported benchmark numbers can't be compared fairly.
 
 ## Stack
-Python 3.11 · OpenCV · MediaPipe Face Landmarker (Tasks API) · NumPy ·
+Python 3.11–3.13 (dev on 3.13) · OpenCV · MediaPipe Face Landmarker (Tasks API) · NumPy ·
 PyYAML · pytest · ruff
+
+## Commands
+```
+python -m venv .venv && .venv\Scripts\activate
+pip install -r requirements-dev.txt && pip install -e . --no-deps
+python -m drowsiness --source 0                 # webcam, window with FPS/latency (q/Esc quits)
+python -m drowsiness --source clip.mp4 --no-display --max-frames 300
+pytest -q                                        # set DROWSINESS_CAMERA_TESTS=1 to include the webcam test
+ruff check . && ruff format --check .
+```
 
 ## Pipeline
 ```
@@ -47,12 +57,21 @@ data/, models/      # gitignored
 ```
 
 ## Shared contracts (`src/drowsiness/types.py`)
+- `FramePacket`: `image` (BGR uint8), `timestamp` (s; camera = grab time,
+  video file = index / fps so replays are deterministic), `index`,
+  `grabbed_at` (perf_counter at grab, latency measurement only).
 - `FrameFeatures`: `timestamp` (s, monotonic), `face_found`, `ear_left`,
   `ear_right`, `mar`, `pitch`, `yaw`, `roll` (degrees), optional `gaze`,
   `blendshapes`. Missing values are `None`.
 - `DriverState` enum: `CALIBRATING`, `NORMAL`, `DROWSY_WARNING`,
   `DROWSY_ALARM`, `DISTRACTED`, `NO_FACE`.
-- `AlertEvent`: `timestamp`, `state`, `reason`, `level`, `details`.
+- `AlertLevel` enum: `INFO` < `WARNING` < `ALARM`.
+- `AlertEvent`: `timestamp`, `state`, `reason`, `level: AlertLevel`, `details`.
+
+Capture sources implement `FrameSource` (`capture/base.py`): `open()`,
+`read() -> FramePacket | None` (None = stream ended), `close()`, `fps`,
+`dropped_frames`; use as a context manager. `open_source(cfg.capture)` picks
+`CameraSource` (int / digit string) or `VideoFileSource` (path).
 
 Changing these requires `system-architect` sign-off and updating every caller.
 
@@ -92,7 +111,7 @@ Changing these requires `system-architect` sign-off and updating every caller.
 
 ### Suggested milestones
 0. Literature review and method selection (done: `docs/literature-review.md`).
-1. Scaffold + contracts + webcam loop showing FPS.
+1. Scaffold + contracts + webcam loop showing FPS (done).
 2. Landmarks + EAR/MAR/head pose overlay; feature CSV logging.
 3. Rules: eye closure, PERCLOS, yawn, nod, looking away, no face + calibration.
 4. Alerts: overlay banner, sound, cooldown/escalation.

@@ -1,0 +1,6 @@
+# Same as requirements-dev.txt but with headless OpenCV (CI has no display).
+numpy>=2
+opencv-python-headless>=4.10
+pyyaml>=6
+pytest>=8
+ruff==0.17.2
