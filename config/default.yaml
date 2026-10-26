@@ -1,0 +1,59 @@
+# Default configuration. Every threshold lives here, not in code.
+# Sources: docs/literature-review.md (section numbers in comments).
+# Values marked "starting point" are to be tuned by data-eval-engineer (M5).
+
+capture:
+  source: 0              # camera index (int) or path to a video file
+  backend: auto          # auto | msmf | dshow | any  (auto: MSMF then DSHOW on Windows)
+  width: 640
+  height: 480
+  fps: 30.0
+  buffer_size: 1         # driver-side buffer; we always process the newest frame
+  read_timeout_s: 1.0    # camera gives no frame for this long -> error (never a silent stop)
+
+runtime:
+  display: true
+  max_frames: null       # stop after N frames (null = run until the source ends / 'q')
+  latency_budget_ms: 50.0
+  fps_window_s: 1.0      # rolling window for the displayed FPS
+  log_level: INFO
+
+calibration:
+  duration_s: 5.0        # eyes open, facing forward
+  min_valid_frames_ratio: 0.7
+
+eyes:
+  closed_ratio: 0.2      # PERCLOS-P80: closed when EAR < closed + 0.2 * (open - closed)  (§6)
+  ear_fallback_closed: 0.21  # absolute threshold if calibration is skipped (starting point)
+  microsleep_s: 1.5      # warning (§6)
+  sleep_s: 3.0           # alarm, Euro NCAP "sleep" > 3 s (§3)
+
+perclos:
+  window_s: 60.0         # P80 over one minute (§2A)
+  warning: 0.15          # starting point
+  alarm: 0.25            # starting point
+
+yawn:
+  mar_threshold: 0.6     # starting point
+  min_duration_s: 1.0
+  count_window_s: 300.0
+  warning_count: 3
+
+head_nod:
+  pitch_delta_deg: 15.0  # below calibrated neutral (starting point)
+  min_duration_s: 1.0
+
+distraction:
+  yaw_deg: 30.0          # off calibrated neutral (starting point)
+  pitch_deg: 25.0        # starting point
+  long_s: 3.0            # Euro NCAP long distraction (§3)
+  short_total_s: 10.0    # Euro NCAP short distraction: >= 10 s off-road ... (§3)
+  short_window_s: 30.0   # ... within 30 s
+
+no_face:
+  timeout_s: 2.0
+
+preprocess:
+  clahe: false           # enable for low light (§2A)
+  clahe_clip: 2.0
+  clahe_tile: 8
