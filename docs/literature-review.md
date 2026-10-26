@@ -126,11 +126,14 @@ already produces.
 | Dataset | Content | Use in this project |
 |---|---|---|
 | **UTA-RLDD** [D2] | 60 subjects, about 30 h, real drowsiness in 3 classes (alert / low-vigilance / drowsy) | Main drowsiness evaluation |
-| **NTHU-DDD** [V5] | Acted drowsiness, day/night, glasses | Secondary evaluation; robustness to night and glasses |
 | **YawDD** [D3] | 322 + 29 in-car videos: talking, singing, yawning; varied eyewear | Yawn / MAR evaluation; talking is a false-positive test |
-| **DMD** [D4] | 37 drivers, 41 h of RGB, depth and IR from 3 cameras; distraction, gaze and drowsiness labels | Distraction / gaze evaluation |
-| **MRL Eye / CEW** [M1][M2] | Eye crops labelled open or closed | Training the optional eye-state CNN (approach C) |
-| Own recordings | Team webcam clips | Our exact camera setup, glasses, low light |
+| **DMD** [D4] | Originally 37 drivers, 41 h of RGB, depth and IR. Since a 2026 revision only RGB real-car video from 14 subjects is unrestricted | Distraction / gaze evaluation |
+| **MRL Eye / CEW** [M1][M2] | Eye crops labelled open or closed; MRL includes glasses and varied lighting | Training the optional eye-state CNN (approach C) |
+| **Own recordings** | Team webcam clips following a fixed script, under bright, normal, low-light and night-like lighting, with and without glasses | **Night and glasses robustness** (replaces NTHU-DDD); our exact camera setup |
+| ~~NTHU-DDD~~ [V5] | Acted drowsiness, day/night, glasses | **Not used.** Access needs a signed agreement emailed to the lab, with replies taking months. Cited only for other papers' results (§2D) |
+
+Access details, usage rules and the recording plan are in
+[dataset-access.md](dataset-access.md).
 
 Evaluation protocol, given the leakage concerns above:
 - Split by **subject**, never by frame.
@@ -196,6 +199,9 @@ Evaluation protocol, given the leakage concerns above:
   especially the 99%+ NTHU-DDD claims and the original 1994 P80 study.
 - Default thresholds (EAR ratio, MAR, angles) are starting points. The
   `data-eval-engineer` agent must tune them on our own data.
+- None of our evaluation data includes true infrared night video, which real
+  in-car night cameras use. Night robustness is tested only on our own dim,
+  visible-light "night-like" recordings.
 
 ---
 

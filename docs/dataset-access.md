@@ -1,81 +1,33 @@
-# Dataset Access – Requests, Downloads and Usage Rules
+# Dataset Access – Downloads, Usage Rules and Own Recordings
 
-Checked on 2026-10-26. Access processes change, so re-check each page before you
-apply. Fill in everything in `[brackets]`.
+Checked on 2026-10-26. Access processes change, so re-check each page before
+downloading. Fill in everything in `[brackets]`.
 
 ## Summary
 
+We only use datasets we can download straight away, plus our own recordings.
+
 | Dataset | Used for | How to get it | Size | Action |
 |---|---|---|---|---|
-| **NTHU-DDD** | Drowsiness eval (acted; night, glasses) | **Signed license agreement by email** | – | **Send request (§1) – slow, do it first** |
-| **UTA-RLDD** | Main drowsiness eval (real) | Direct Google Drive link | 111.3 GB | Download (§2) |
-| **DMD** (drowsiness + distraction parts) | Distraction / gaze eval | Direct download, 18+, academic only | not stated | Download (§2) |
-| **YawDD** | Yawn / MAR eval | Free IEEE account login | 4.94 GB | Download (§2) |
-| **MRL Eye** | Train eye-state CNN (optional, M3+) | Public download | ~85k images | Download (§2) |
-| **CEW** | Train/test eye-state CNN (optional) | Direct Google Drive links | 2.6–20 MB | Download (§2) |
-| **Own recordings** | Our camera setup, glasses, low light | Record ourselves | – | **Consent form (§4) before recording** |
+| **UTA-RLDD** | Main drowsiness eval (real, not acted) | Direct Google Drive link | 111.3 GB | Download (§1) |
+| **DMD** (drowsiness + distraction parts) | Distraction / gaze eval | Direct download, 18+, academic only | not stated | Download (§1) |
+| **YawDD** | Yawn / MAR eval; varied eyewear | Free IEEE account login | 4.94 GB | Download (§1) |
+| **MRL Eye** | Train eye-state CNN (optional); includes glasses, varied lighting | Public download | ~85k images | Download (§1) |
+| **CEW** | Train/test eye-state CNN (optional) | Direct Google Drive links | 2.6–20 MB | Download (§1) |
+| **Own recordings** | **Night-like / low light, glasses**, our exact camera setup | Record ourselves | – | Plan (§3) + consent form (§4) before recording |
 
-Only NTHU-DDD needs a formal request. Everything else is a download, but each one
-has usage terms we must follow (§3).
-
----
-
-## 1. NTHU-DDD – request email
-
-**Where:** NTHU CV Lab dataset page:
-<http://cv.cs.nthu.edu.tw/php/callforpaper/datasets/DDD/>. Download the
-**Dataset License Agreement** there. The page refused connections from our
-automated check, so open it in a normal browser; if it's down, try again later
-or from the university network.
-
-**What to send:**
-- [ ] The Dataset License Agreement, filled in and **signed**. If it asks for a
-      supervisor/advisor, have your course instructor sign as well.
-- [ ] Registration form, if the page provides one (the lab's ACCV 2016 workshop
-      page asked for both together).
-- [ ] Send from your **university email address**, not a personal one.
-
-**To:** `cvlablai636@my.nthu.edu.tw`
-**Subject (exactly):** `Dataset on Driver Drowsiness Detection from Video`
-
-> Dear NTHU Computer Vision Lab,
->
-> I am a [year/program, e.g. 3rd-year undergraduate in Computer Science] student
-> at [University], working on a course project for [course code and name,
-> e.g. CP463 ...] under the supervision of [instructor name, title].
->
-> Our project develops a real-time, camera-based driver drowsiness and
-> inattention detection system using facial landmarks (eye closure, PERCLOS,
-> yawning and head pose). We would like to use the NTHU Driver Drowsiness
-> Detection dataset to evaluate our method, in particular under night-time and
-> eyeglasses conditions.
->
-> Please find attached the signed Dataset License Agreement [and registration
-> form]. We will use the dataset for non-commercial academic research only,
-> will not redistribute it, will store it only on our team's private machines,
-> and will cite your work in any report or publication that uses it.
->
-> Team members who will access the data: [names, student IDs].
->
-> Thank you for considering our request.
->
-> Best regards,
-> [Your name]
-> [Program, University]
-> [University email] · [Supervisor name and email]
-
-**Expect a slow reply.** One user reported waiting more than 4 months with no
-answer. If there's no response after about 3 weeks, send one polite follow-up
-replying to your original email. Plan the project so NTHU-DDD is optional:
-UTA-RLDD is the main drowsiness benchmark.
-
-**Don't use the Kaggle "NTHU-DDD2" mirror as a substitute** unless its license
-clearly allows it. Reports describe the official data as covered by a
-non-disclosure agreement, so a re-upload may not be legitimate.
+### Not used: NTHU-DDD
+NTHU-DDD needs a signed license agreement emailed to the lab, and replies can
+take months (one user reported waiting more than 4 months). That doesn't fit a
+course timeline, so we don't use it. It was the only dataset covering night
+driving and glasses for drowsiness, so **our own recordings cover those
+conditions instead** (§3). Don't substitute the Kaggle "NTHU-DDD2" re-upload:
+the official data appears to be under a non-disclosure agreement, so the copy
+may not be legitimate.
 
 ---
 
-## 2. Direct downloads – checklist
+## 1. Downloads – checklist
 
 ### UTA-RLDD
 - Page: <https://sites.google.com/view/utarldd/home>. The data is in a Google
@@ -102,7 +54,7 @@ non-disclosure agreement, so a re-upload may not be legitimate.
   needed). The page also mentions a subscription; if it asks you to pay, check
   whether the university library has IEEE DataPort access before paying anything.
 - Files: `YawDD.rar.gz` (4.94 GB) **and** the Participants Information file;
-  download both, because the second one controls which videos can be shown (§3).
+  download both, because the second one controls which videos can be shown (§2).
 
 ### MRL Eye
 - Page: <https://mrl.cs.vsb.cz/eyedataset.html>. It's described as publicly
@@ -117,20 +69,20 @@ non-disclosure agreement, so a re-upload may not be legitimate.
 
 ---
 
-## 3. Usage rules the whole team must follow
+## 2. Usage rules the whole team must follow
 
 | Dataset | Commercial use | Redistribute / share link | Show faces in report or slides | Citation required |
 |---|---|---|---|---|
-| NTHU-DDD | No | No | Check the license agreement | Yes |
 | UTA-RLDD | Not stated – treat as no | Not stated – treat as no | **Only 36 of 60 participants** allowed it; identities must never be revealed | Yes |
 | DMD | No (CC BY-NC-ND 4.0) | No modified copies | Allowed subjects only | Yes |
 | YawDD | Research use | Not stated – treat as no | **Only videos not marked "No"** in Participants Information | Yes |
 | MRL Eye | Check page | Check page | – | Yes |
 | CEW | No | **No – don't share the link** | – | Yes |
+| Own recordings | No | No | Only people who ticked "allow" on the consent form | – |
 
 Practical rules:
-- Keep all data in `data/` (git-ignored). Never commit it, upload it to Drive
-  folders others can see, or post it in chat groups.
+- Keep all data in `data/` or `recordings/` (both git-ignored). Never commit it,
+  upload it to Drive folders others can see, or post it in chat groups.
 - Each team member downloads their own copy. Don't pass files around.
 - Before putting any face image in the report or slides, check it against the
   rules above. When in doubt, use frames from our own consenting recordings.
@@ -149,8 +101,65 @@ Practical rules:
 - **CEW:** F. Song, X. Tan, X. Liu, S. Chen, "Eyes Closeness Detection from Still
   Images with Multi-scale Histograms of Principal Oriented Gradients," Pattern
   Recognition, 2014.
-- **NTHU-DDD, MRL Eye:** use the citation given on their pages or in the
-  license agreement.
+- **MRL Eye:** use the citation given on its page.
+
+---
+
+## 3. Own recordings – plan
+
+These clips replace NTHU-DDD for **night-like lighting and glasses**, and are the
+only data from our exact camera setup.
+
+### Setup
+- **Camera:** the webcam we'll demo with, placed like a dashcam: in front of
+  the "driver", slightly below eye level, 50–80 cm away, face fully in frame.
+- **Format:** 640×480, 30 FPS, constant frame rate (avoid phone recordings,
+  which are usually variable frame rate). Any recorder works if set to a
+  constant 30 FPS, e.g. OBS Studio. Check a clip opens with
+  `python -m drowsiness --source <clip> --no-display`; it rejects files with an
+  implausible frame rate.
+- **Participants:** every team member, plus classmates who consent. Aim for at
+  least 6 people, with at least 2 who wear glasses.
+
+### Conditions (record the full script under each)
+
+| Lighting | Eyewear |
+|---|---|
+| Bright (daylight or well-lit room) | No glasses |
+| Normal indoor | Glasses (own prescription) |
+| **Low light** – room lights off, one dim lamp | Sunglasses (optional, 1–2 people) |
+| **Night-like** – lights off, only a screen or small lamp below the face, like a dashboard | |
+
+Each person records every lighting level, with and without glasses if they
+wear them.
+
+### Script (about 2 minutes per clip; follow it in order)
+1. **Calibration, 10 s:** look straight ahead, eyes open, blink normally.
+2. **Normal driving, 30 s:** natural blinks and small head movements; this is
+   the "should not alert" baseline.
+3. **Microsleep:** close eyes for about 2 s, twice.
+4. **Sleep:** close eyes for about 4 s, once.
+5. **Drowsy blinking, 20 s:** slow, heavy blinks (raises PERCLOS).
+6. **Yawning:** 3 yawns, a few seconds apart.
+7. **Talking or singing, 10 s:** mouth moves but no yawn (false-alarm check).
+8. **Head nod:** let the head drop forward for about 1–2 s, twice.
+9. **Short glance, ~1 s:** check a side mirror (should **not** alert).
+10. **Long distraction, ~4 s:** look down at a phone in your lap.
+11. **Repeated glances:** about 6 glances of ~2 s each within 30 s (short
+    distraction rule).
+12. **No face, ~3 s:** turn away fully or cover the camera.
+
+### Labels and files
+- Name files by participant ID and condition, e.g.
+  `recordings/P03_nightlike_glasses.mp4`. Never use real names.
+- Label each script step as `[start_s, end_s, label]` intervals in
+  `eval/labels/<clip>.json`. Write down the start time of each step while
+  recording to make this quick.
+
+### Known limitation
+None of our data includes true **infrared** night video (what real in-car night
+cameras use). Our "night-like" clips are dim visible-light video. Say so in the
+report.
 
 ---
 
@@ -167,7 +176,8 @@ members it usually doesn't, but ask your instructor.
 >
 > **What will be recorded:** short webcam videos of my face while I simulate
 > driving behaviours (normal driving, blinking, closing my eyes, yawning,
-> nodding, looking away), with and without glasses and in different lighting.
+> nodding, looking away), with and without glasses and in different lighting,
+> including dim, night-like lighting.
 >
 > **How it will be used:** only to develop, test and tune the project's
 > detection system, and, if I tick the box below, as images in the project
@@ -186,5 +196,4 @@ members it usually doesn't, but ask your instructor.
 >
 > Signature: ____________  Date: ____________
 
-Keep signed forms with the team lead (not in the repo). Name recordings by
-participant ID (e.g. `P01_eyes_closed_lowlight.mp4`), not by name.
+Keep signed forms with the team lead (not in the repo).
