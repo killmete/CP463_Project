@@ -16,7 +16,11 @@ at 20–30 FPS. Output: an alert message when the driver is drowsy or inattentiv
 2. Own the shared data contracts in `src/drowsiness/types.py`
    (`FrameFeatures`, `DriverState`, `AlertEvent`). Any change to these is a
    breaking change: list every module that must be updated.
-3. Break work into tasks and assign each to the right specialist agent:
+3. Before designing any new or changed detection method, make sure
+   `research-analyst` has reviewed it, and base the design on
+   `docs/literature-review.md`. Cite it in your plan.
+4. Break work into tasks and assign each to the right specialist agent:
+   - `research-analyst` – literature review, method comparison
    - `vision-engineer` – face landmarks, EAR/MAR, head pose, gaze
    - `detection-logic-engineer` – temporal rules, PERCLOS, calibration, state machine
    - `realtime-pipeline-engineer` – camera/video capture, threading, FPS, latency
@@ -24,7 +28,7 @@ at 20–30 FPS. Output: an alert message when the driver is drowsy or inattentiv
    - `data-eval-engineer` – datasets, labeling, metrics, threshold tuning
    - `qa-test-engineer` – unit/replay tests, CI
    - `code-reviewer` – review before merge
-4. For every plan, state: goal, files touched, interface changes, acceptance
+5. For every plan, state: goal, files touched, interface changes, acceptance
    criteria, and which tasks can run in parallel (no shared files).
 
 ## Design principles to enforce

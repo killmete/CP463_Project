@@ -5,6 +5,17 @@ and raises an alert message when it detects drowsiness (eyes closing,
 microsleep, yawning, head nodding) or inattention (looking away, face not
 visible).
 
+## Chosen method (see `docs/literature-review.md`)
+Facial landmarks (MediaPipe Face Landmarker) → geometric features
+(EAR, MAR, head pose, gaze) → time-based rules aligned with PERCLOS and Euro
+NCAP driver-monitoring definitions, with per-driver calibration. Planned
+upgrades if evaluation shows they're needed:
+1. a lightweight eye-state CNN (trained on MRL Eye) to replace or fuse with EAR;
+2. a small blink-sequence LSTM (trained on UTA-RLDD) for early drowsiness.
+
+End-to-end deep video models were rejected: too slow on CPU, and their
+reported benchmark numbers can't be compared fairly.
+
 ## Stack
 Python 3.11 · OpenCV · MediaPipe Face Landmarker (Tasks API) · NumPy ·
 PyYAML · pytest · ruff
@@ -56,7 +67,8 @@ Changing these requires `system-architect` sign-off and updating every caller.
 ## Agent team (`.claude/agents/`)
 | Agent | Owns | Use for |
 |---|---|---|
-| `system-architect` | `types.py`, `CLAUDE.md`, `docs/` | plans, contracts, task breakdown – start here |
+| `research-analyst` | `docs/literature-review.md`, `docs/research/` | literature review before any method/design decision |
+| `system-architect` | `types.py`, `CLAUDE.md`, `docs/architecture.md` | plans, contracts, task breakdown |
 | `vision-engineer` | `perception/` | landmarks, EAR/MAR, head pose, gaze |
 | `detection-logic-engineer` | `logic/` | timing rules, PERCLOS, calibration, state machine |
 | `realtime-pipeline-engineer` | `capture/`, `app.py`, `config.py` | capture, threading, FPS/latency, CLI |
@@ -66,7 +78,10 @@ Changing these requires `system-architect` sign-off and updating every caller.
 | `code-reviewer` | (read-only) | review every diff before commit |
 
 ### Workflow
-1. `system-architect` plans the feature and defines contract changes.
+0. `research-analyst` reviews the literature for any new or changed detection
+   method and recommends an approach with citations.
+1. `system-architect` plans the feature from that recommendation and defines
+   contract changes.
 2. Specialists implement in parallel when they don't share files
    (perception / capture / alerts are independent; logic depends on the
    `FrameFeatures` contract only).
@@ -76,6 +91,7 @@ Changing these requires `system-architect` sign-off and updating every caller.
 5. `code-reviewer` reviews; fix blockers, then commit.
 
 ### Suggested milestones
+0. Literature review and method selection (done: `docs/literature-review.md`).
 1. Scaffold + contracts + webcam loop showing FPS.
 2. Landmarks + EAR/MAR/head pose overlay; feature CSV logging.
 3. Rules: eye closure, PERCLOS, yawn, nod, looking away, no face + calibration.
