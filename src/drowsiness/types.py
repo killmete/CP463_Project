@@ -32,7 +32,11 @@ class FramePacket:
 
 @dataclass(frozen=True, slots=True)
 class FrameFeatures:
-    """Per-frame measurements from the perception layer. Missing values are None."""
+    """Per-frame measurements from the perception layer. Missing values are None.
+
+    Left/right are the driver's anatomical sides (frames are never mirrored). Angles
+    are in the camera frame and uncalibrated: logic removes the neutral offset.
+    """
 
     timestamp: float
     face_found: bool
@@ -44,10 +48,25 @@ class FrameFeatures:
     yaw: float | None = None
     """Degrees; positive = head turned to the driver's left."""
     roll: float | None = None
-    """Degrees."""
+    """Degrees; positive = head tilted toward the driver's left shoulder."""
     gaze: tuple[float, float] | None = None
     """Normalised (horizontal, vertical) iris offset in [-1, 1]."""
     blendshapes: Mapping[str, float] | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class PerceptionOutput:
+    """What perception hands to the app: features for logic, landmarks for the overlay.
+
+    Only `features` crosses into logic, so logic can be replayed from a feature CSV.
+    """
+
+    features: FrameFeatures
+    landmarks: np.ndarray | None
+    """(478, 3) float32: x, y in pixels of the original frame; z is MediaPipe depth x width.
+    None when no face was found."""
+    perception_ms: float
+    """Wall time spent in perception for this frame."""
 
 
 class DriverState(StrEnum):

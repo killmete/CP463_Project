@@ -1,0 +1,5 @@
+# Install with: pip install --no-deps -r requirements-mediapipe.txt
+# mediapipe declares opencv-contrib-python, which would overwrite our OpenCV build
+# (opencv-python / opencv-python-headless share the cv2 package). Its other runtime
+# dependencies are listed in requirements.txt / requirements-ci.txt instead.
+mediapipe==1.1.1

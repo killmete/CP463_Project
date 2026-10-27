@@ -66,6 +66,10 @@ def test_overrides_win_over_file(tmp_path: Path):
         ({"eyes": {"microsleep_s": 4.0}}, "microsleep_s < eyes.sleep_s"),
         ({"perclos": {"warning": 0.3}}, "warning < perclos.alarm"),
         ({"distraction": {"short_total_s": 40.0}}, "short_total_s"),
+        ({"perception": {"min_tracking_confidence": 1.2}}, "min_tracking_confidence"),
+        ({"perception": {"num_faces": 0}}, "num_faces"),
+        ({"perception": {"model_path": None}}, "expected str"),
+        ({"overlay": {"values": "yes"}}, "expected bool"),
     ],
 )
 def test_invalid_config_raises(overrides, message):

@@ -23,10 +23,13 @@ PyYAML · pytest · ruff
 ## Commands
 ```
 python -m venv .venv && .venv\Scripts\activate
-pip install -r requirements-dev.txt && pip install -e . --no-deps
-python -m drowsiness --source 0                 # webcam, window with FPS/latency (q/Esc quits)
-python -m drowsiness --source clip.mp4 --no-display --max-frames 300
-pytest -q                                        # set DROWSINESS_CAMERA_TESTS=1 to include the webcam test
+pip install -r requirements-dev.txt && pip install --no-deps -r requirements-mediapipe.txt
+pip install -e . --no-deps
+python -m drowsiness.perception.fetch_model      # models/face_landmarker.task (gitignored)
+python -m drowsiness --source 0                 # webcam + debug overlay (q/Esc quits)
+python -m drowsiness --source clip.mp4 --no-display --max-frames 300 --log-features out.csv
+python -m drowsiness --source 0 --no-perception # capture only
+pytest -q        # DROWSINESS_CAMERA_TESTS=1: webcam tests; DROWSINESS_PERF_SOURCE=<img|clip>: face speed check
 ruff check . && ruff format --check .
 ```
 
@@ -61,8 +64,10 @@ data/, models/      # gitignored
   video file = index / fps so replays are deterministic), `index`,
   `grabbed_at` (perf_counter at grab, latency measurement only).
 - `FrameFeatures`: `timestamp` (s, monotonic), `face_found`, `ear_left`,
-  `ear_right`, `mar`, `pitch`, `yaw`, `roll` (degrees), optional `gaze`,
-  `blendshapes`. Missing values are `None`.
+  `ear_right` (driver's own eyes), `mar`, `pitch`, `yaw`, `roll` (degrees,
+  uncalibrated), optional `gaze`, `blendshapes`. Missing values are `None`.
+- `PerceptionOutput`: `features`, `landmarks` ((478, 3) pixels, or None),
+  `perception_ms`. Only `features` goes to logic.
 - `DriverState` enum: `CALIBRATING`, `NORMAL`, `DROWSY_WARNING`,
   `DROWSY_ALARM`, `DISTRACTED`, `NO_FACE`.
 - `AlertLevel` enum: `INFO` < `WARNING` < `ALARM`.
@@ -112,7 +117,8 @@ Changing these requires `system-architect` sign-off and updating every caller.
 ### Suggested milestones
 0. Literature review and method selection (done: `docs/literature-review.md`).
 1. Scaffold + contracts + webcam loop showing FPS (done).
-2. Landmarks + EAR/MAR/head pose overlay; feature CSV logging.
+2. Landmarks + EAR/MAR/head pose overlay; feature CSV logging (done; see
+   `docs/architecture.md` for conventions and the CSV format).
 3. Rules: eye closure, PERCLOS, yawn, nod, looking away, no face + calibration.
 4. Alerts: overlay banner, sound, cooldown/escalation.
 5. Evaluation on public datasets + own clips; threshold tuning; report.

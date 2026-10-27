@@ -18,6 +18,7 @@ runtime:
   latency_budget_ms: 50.0
   fps_window_s: 1.0      # rolling window for the displayed FPS
   log_level: INFO
+  log_features: null     # path of a feature CSV to write (--log-features), null = off
 
 calibration:
   duration_s: 5.0        # eyes open, facing forward
@@ -58,3 +59,18 @@ preprocess:
   clahe: false           # enable for low light (§2A)
   clahe_clip: 2.0
   clahe_tile: 8
+
+perception:
+  enabled: true          # false (or --no-perception) = capture-only loop
+  model_path: models/face_landmarker.task  # relative to the working directory;
+                         # get it with: python -m drowsiness.perception.fetch_model
+  num_faces: 1           # >1: the largest face (the driver) is kept. With 1, MediaPipe
+                         # tracks one face, which could be a passenger (revisit in M3)
+  min_face_detection_confidence: 0.5
+  min_face_presence_confidence: 0.5
+  min_tracking_confidence: 0.5
+  output_blendshapes: true
+
+overlay:                 # debug overlay drawn in the display window
+  landmarks: true        # eye/mouth contours and head direction
+  values: true           # EAR, MAR, pitch/yaw/roll, perception time
