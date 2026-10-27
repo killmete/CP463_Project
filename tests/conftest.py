@@ -1,3 +1,4 @@
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -30,3 +31,17 @@ def synthetic_clip(tmp_path: Path, clip_spec: ClipSpec) -> Path:
         writer.write(np.full((clip_spec.height, clip_spec.width, 3), 8 * i, dtype=np.uint8))
     writer.release()
     return path
+
+
+MODEL_PATH = Path(__file__).resolve().parents[1] / "models" / "face_landmarker.task"
+
+
+@pytest.fixture
+def model_path() -> Path:
+    """The Face Landmarker model; skipped if absent unless DROWSINESS_REQUIRE_MODEL=1 (CI)."""
+    if not MODEL_PATH.is_file():
+        message = f"model not found at {MODEL_PATH} (python -m drowsiness.perception.fetch_model)"
+        if os.environ.get("DROWSINESS_REQUIRE_MODEL"):
+            pytest.fail(message)
+        pytest.skip(message)
+    return MODEL_PATH

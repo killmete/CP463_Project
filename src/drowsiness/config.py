@@ -46,6 +46,7 @@ class RuntimeConfig:
     latency_budget_ms: float
     fps_window_s: float
     log_level: str
+    log_features: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,6 +106,23 @@ class PreprocessConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class PerceptionConfig:
+    enabled: bool
+    model_path: str
+    num_faces: int
+    min_face_detection_confidence: float
+    min_face_presence_confidence: float
+    min_tracking_confidence: float
+    output_blendshapes: bool
+
+
+@dataclass(frozen=True, slots=True)
+class OverlayConfig:
+    landmarks: bool
+    values: bool
+
+
+@dataclass(frozen=True, slots=True)
 class Config:
     capture: CaptureConfig
     runtime: RuntimeConfig
@@ -116,6 +134,8 @@ class Config:
     distraction: DistractionConfig
     no_face: NoFaceConfig
     preprocess: PreprocessConfig
+    perception: PerceptionConfig
+    overlay: OverlayConfig
 
 
 def load_config(
@@ -211,11 +231,15 @@ def _check_semantics(config: Config) -> None:
         raise ConfigError(f"config.capture.backend: must be one of {CAMERA_BACKENDS}")
     if config.runtime.log_level not in LOG_LEVELS:
         raise ConfigError(f"config.runtime.log_level: must be one of {LOG_LEVELS}")
+    p = config.perception
     for where, value in [
         ("eyes.closed_ratio", config.eyes.closed_ratio),
         ("calibration.min_valid_frames_ratio", config.calibration.min_valid_frames_ratio),
         ("perclos.warning", config.perclos.warning),
         ("perclos.alarm", config.perclos.alarm),
+        ("perception.min_face_detection_confidence", p.min_face_detection_confidence),
+        ("perception.min_face_presence_confidence", p.min_face_presence_confidence),
+        ("perception.min_tracking_confidence", p.min_tracking_confidence),
     ]:
         if value > 1:
             raise ConfigError(f"config.{where}: must be a ratio in (0, 1], got {value!r}")

@@ -2,5 +2,11 @@
 numpy>=2
 opencv-python-headless>=4.10
 pyyaml>=6
+# mediapipe's runtime deps except opencv-contrib (see requirements-mediapipe.txt)
+absl-py~=2.3
+certifi
+flatbuffers~=25.9
+matplotlib
+sounddevice~=0.5
 pytest>=8
 ruff==0.17.2

@@ -9,9 +9,17 @@ description = "Real-time driver drowsiness and inattention detection from a dash
 readme = "README.md"
 requires-python = ">=3.11"
 # OpenCV is an extra so GUI and headless builds can't both be pulled in: pick one.
+# mediapipe is deliberately not listed: it requires opencv-contrib-python, which would
+# overwrite the chosen OpenCV build. Install it with
+# `pip install --no-deps -r requirements-mediapipe.txt` (its other deps are below).
 dependencies = [
     "numpy>=2",
     "pyyaml>=6",
+    "absl-py~=2.3",
+    "certifi",
+    "flatbuffers~=25.9",
+    "matplotlib",
+    "sounddevice~=0.5",
 ]
 
 [project.optional-dependencies]
@@ -38,4 +46,8 @@ select = ["E", "F", "W", "I", "B", "UP"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = ["camera: needs a real webcam (set DROWSINESS_CAMERA_TESTS=1 to run)"]
+markers = [
+    "camera: needs a real webcam (set DROWSINESS_CAMERA_TESTS=1 to run)",
+    "model: needs models/face_landmarker.task (skipped if missing unless DROWSINESS_REQUIRE_MODEL=1)",
+    "perf: per-frame timing check",
+]

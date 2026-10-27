@@ -12,20 +12,36 @@ jobs:
         os: [ubuntu-latest, windows-latest]
         python-version: ["3.11", "3.13"]
     runs-on: ${{ matrix.os }}
+    env:
+      DROWSINESS_REQUIRE_MODEL: "1"  # model-marked tests fail (not skip) without the model
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+      - name: System libraries (Linux)
+        # `import mediapipe` loads sounddevice (PortAudio) and libmediapipe.so (EGL, GLES).
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libportaudio2 libegl1 libgles2
       - name: Install dependencies
-        # Headless OpenCV on CI (no display); install the package without pulling opencv-python.
+        # Headless OpenCV on CI (no display); mediapipe without its opencv-contrib dependency;
+        # install the package without pulling opencv-python.
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-ci.txt
+          pip install --no-deps -r requirements-mediapipe.txt
           pip install -e . --no-deps
+      - name: Cache landmark model
+        uses: actions/cache@v4
+        with:
+          path: models/face_landmarker.task
+          key: face-landmarker-64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff
+      - name: Fetch landmark model (sha256-checked)
+        run: python -m drowsiness.perception.fetch_model
       - name: Lint
         run: |
           ruff check .
           ruff format --check .
       - name: Test
-        run: pytest -q
+        # Timing checks are skipped on shared runners (noisy); run them locally.
+        run: pytest -q -m "not perf"
