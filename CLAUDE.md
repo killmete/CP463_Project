@@ -26,7 +26,7 @@ python -m venv .venv && .venv\Scripts\activate
 pip install -r requirements-dev.txt && pip install --no-deps -r requirements-mediapipe.txt
 pip install -e . --no-deps
 python -m drowsiness.perception.fetch_model      # models/face_landmarker.task (gitignored)
-python -m drowsiness --source 0                 # webcam + debug overlay (q/Esc quits)
+python -m drowsiness --source 0                 # webcam + debug overlay (q/Esc quits, c recalibrates)
 python -m drowsiness --source clip.mp4 --no-display --max-frames 300 --log-features out.csv
 python -m drowsiness --source 0 --no-perception # capture only
 pytest -q        # DROWSINESS_CAMERA_TESTS=1: webcam tests; DROWSINESS_PERF_SOURCE=<img|clip>: face speed check
@@ -68,6 +68,9 @@ data/, models/      # gitignored
   uncalibrated), optional `gaze`, `blendshapes`. Missing values are `None`.
 - `PerceptionOutput`: `features`, `landmarks` ((478, 3) pixels, or None),
   `perception_ms`. Only `features` goes to logic.
+- `LogicOutput`: `state`, `events` (on transitions, plus INFO calibration events), `reasons` (active,
+  highest priority first), `metrics` (live timers for overlay/logs). Logic API:
+  `DriverMonitor(cfg).update(features) -> LogicOutput`, `.recalibrate()`.
 - `DriverState` enum: `CALIBRATING`, `NORMAL`, `DROWSY_WARNING`,
   `DROWSY_ALARM`, `DISTRACTED`, `NO_FACE`.
 - `AlertLevel` enum: `INFO` < `WARNING` < `ALARM`.
@@ -119,7 +122,8 @@ Changing these requires `system-architect` sign-off and updating every caller.
 1. Scaffold + contracts + webcam loop showing FPS (done).
 2. Landmarks + EAR/MAR/head pose overlay; feature CSV logging (done; see
    `docs/architecture.md` for conventions and the CSV format).
-3. Rules: eye closure, PERCLOS, yawn, nod, looking away, no face + calibration.
+3. Rules: eye closure, PERCLOS, yawn, nod, looking away, no face + calibration
+   (done; conventions in `docs/architecture.md`).
 4. Alerts: overlay banner, sound, cooldown/escalation.
 5. Evaluation on public datasets + own clips; threshold tuning; report.
 6. (Optional) CNN eye-state model, night/IR robustness, notifications.

@@ -94,3 +94,16 @@ class AlertEvent:
     """Machine-readable cause, e.g. "microsleep", "long_distraction"."""
     level: AlertLevel
     details: Mapping[str, float | str] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
+class LogicOutput:
+    """What logic hands to the app each frame. Alerts consume `events`; ui shows the rest."""
+
+    state: DriverState
+    events: tuple[AlertEvent, ...] = ()
+    """Emitted only on state transitions (and calibration results), never every frame."""
+    reasons: tuple[str, ...] = ()
+    """Active conditions, highest priority first (e.g. "microsleep", "no_face")."""
+    metrics: Mapping[str, float] = field(default_factory=dict)
+    """Live values for the overlay and logs: closed_s, perclos, off_road_s, ..."""

@@ -2,6 +2,6 @@
 
 from __future__ import annotations
 
-from drowsiness.ui.overlay import draw_perception, draw_status
+from drowsiness.ui.overlay import draw_logic, draw_perception, draw_status
 
-__all__ = ["draw_perception", "draw_status"]
+__all__ = ["draw_logic", "draw_perception", "draw_status"]

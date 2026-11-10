@@ -5,12 +5,15 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from conftest import ClipSpec
 from drowsiness import app as app_module
 from drowsiness.app import FpsMeter, main, run_loop
 from drowsiness.capture import CameraError, FrameSource, VideoFileSource
 from drowsiness.config import load_config
 from drowsiness.feature_log import FeatureCsvWriter, read_feature_csv
+from drowsiness.logic import DriverMonitor
 from drowsiness.perception import LandmarkResult, Perception
+from drowsiness.types import DriverState
 
 CAPTURE_ONLY = ["--no-display", "--no-perception"]
 
@@ -172,3 +175,26 @@ def test_main_closes_perception_when_source_fails(monkeypatch, tmp_path: Path):
     assert main(args) == 1
     assert closed == [True]
     assert not csv_path.exists()  # no stub CSV for a source that never opened
+
+
+class NeverFace:
+    def detect(self, rgb, timestamp_ms):
+        return None
+
+    def close(self):
+        pass
+
+
+@pytest.mark.parametrize("clip_spec", [ClipSpec(frames=30, fps=10.0)])  # 3 s clip
+def test_run_loop_runs_logic_and_counts_events(synthetic_clip: Path, clip_spec, caplog):
+    cfg = load_config()
+    with (
+        VideoFileSource(synthetic_clip) as source,
+        Perception(NeverFace(), cfg.preprocess) as perception,
+    ):
+        monitor = DriverMonitor(cfg)
+        with caplog.at_level("INFO", logger="drowsiness"):
+            stats = run_loop(source, cfg, display=False, perception=perception, monitor=monitor)
+    assert monitor.state == DriverState.NO_FACE  # no face for > 2 s, even while calibrating
+    assert stats.alert_events == 1
+    assert "NO_FACE (no_face)" in caplog.text

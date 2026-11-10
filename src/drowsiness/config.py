@@ -53,11 +53,14 @@ class RuntimeConfig:
 class CalibrationConfig:
     duration_s: float
     min_valid_frames_ratio: float
+    max_attempts: int
+    min_open_ear: float
 
 
 @dataclass(frozen=True, slots=True)
 class EyesConfig:
     closed_ratio: float
+    closed_ear_fraction: float
     ear_fallback_closed: float
     microsleep_s: float
     sleep_s: float
@@ -68,6 +71,7 @@ class PerclosConfig:
     window_s: float
     warning: float
     alarm: float
+    min_valid_ratio: float
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,6 +100,19 @@ class DistractionConfig:
 @dataclass(frozen=True, slots=True)
 class NoFaceConfig:
     timeout_s: float
+
+
+@dataclass(frozen=True, slots=True)
+class SignalsConfig:
+    max_gap_s: float
+    carry_min_s: float
+    max_carry_s: float
+    smoothing_s: float
+
+
+@dataclass(frozen=True, slots=True)
+class StateMachineConfig:
+    clear_s: float
 
 
 @dataclass(frozen=True, slots=True)
@@ -133,6 +150,8 @@ class Config:
     head_nod: HeadNodConfig
     distraction: DistractionConfig
     no_face: NoFaceConfig
+    signals: SignalsConfig
+    state_machine: StateMachineConfig
     preprocess: PreprocessConfig
     perception: PerceptionConfig
     overlay: OverlayConfig
@@ -237,6 +256,7 @@ def _check_semantics(config: Config) -> None:
         ("calibration.min_valid_frames_ratio", config.calibration.min_valid_frames_ratio),
         ("perclos.warning", config.perclos.warning),
         ("perclos.alarm", config.perclos.alarm),
+        ("perclos.min_valid_ratio", config.perclos.min_valid_ratio),
         ("perception.min_face_detection_confidence", p.min_face_detection_confidence),
         ("perception.min_face_presence_confidence", p.min_face_presence_confidence),
         ("perception.min_tracking_confidence", p.min_tracking_confidence),
@@ -251,3 +271,7 @@ def _check_semantics(config: Config) -> None:
             raise ConfigError(f"config: expected {where}")
     if config.distraction.short_total_s > config.distraction.short_window_s:
         raise ConfigError("config: expected distraction.short_total_s <= short_window_s")
+    if not config.eyes.closed_ear_fraction < 1:
+        raise ConfigError("config.eyes.closed_ear_fraction: must be < 1")
+    if not config.signals.max_gap_s < config.no_face.timeout_s:
+        raise ConfigError("config: expected signals.max_gap_s < no_face.timeout_s")

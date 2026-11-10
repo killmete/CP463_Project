@@ -70,6 +70,10 @@ def test_overrides_win_over_file(tmp_path: Path):
         ({"perception": {"num_faces": 0}}, "num_faces"),
         ({"perception": {"model_path": None}}, "expected str"),
         ({"overlay": {"values": "yes"}}, "expected bool"),
+        ({"eyes": {"closed_ear_fraction": 1.0}}, "closed_ear_fraction"),
+        ({"signals": {"max_gap_s": 2.5}}, "max_gap_s < no_face.timeout_s"),
+        ({"calibration": {"max_attempts": 0}}, "max_attempts"),
+        ({"state_machine": {"clear_s": -1}}, "clear_s"),
     ],
 )
 def test_invalid_config_raises(overrides, message):
