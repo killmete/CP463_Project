@@ -2,8 +2,8 @@ import numpy as np
 import pytest
 
 from drowsiness.config import load_config
-from drowsiness.types import FrameFeatures, PerceptionOutput
-from drowsiness.ui import draw_perception, draw_status
+from drowsiness.types import DriverState, FrameFeatures, LogicOutput, PerceptionOutput
+from drowsiness.ui import draw_logic, draw_perception, draw_status
 
 CFG = load_config().overlay
 
@@ -55,3 +55,12 @@ def test_draw_status_turns_red_over_budget():
     draw_status(slow, 30.0, 80.0, 50.0)
     assert ok[:, :, 1].max() > 150 and ok[:, :, 2].max() == 0
     assert slow[:, :, 2].max() > 200
+
+
+@pytest.mark.parametrize("state", list(DriverState))
+def test_draw_logic_for_every_state(state):
+    image = blank()
+    out = LogicOutput(state, (), ("microsleep",), {"closed_s": 1.6, "perclos": 0.12})
+    draw_logic(image, out)
+    assert image.shape == (480, 640, 3) and image.dtype == np.uint8
+    assert image[:, 350:].any() and not image[200:, :].any()  # top-right panel only

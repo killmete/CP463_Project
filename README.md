@@ -9,9 +9,11 @@ Method: MediaPipe facial landmarks → eye/mouth openness and head pose →
 time-based rules based on PERCLOS and Euro NCAP driver-monitoring
 definitions. See [docs/literature-review.md](docs/literature-review.md).
 
-> Status: milestone 2 – per-frame perception (EAR per eye, MAR, head
-> pitch/yaw/roll, blendshapes) with a debug overlay and feature CSV logging.
-> Detection rules and alerts come in the next milestones.
+> Status: milestone 3 – per-frame perception (EAR per eye, MAR, head
+> pitch/yaw/roll) plus detection logic: per-driver calibration, microsleep,
+> sleep, PERCLOS, yawning, head nod, long/short distraction and no-face rules,
+> and a state machine. States and events show in the debug overlay and the log;
+> the driver-facing banner and sound come in milestone 4.
 
 ## Install
 
@@ -40,7 +42,7 @@ Don't install both.
 ## Run
 
 ```
-python -m drowsiness --source 0                    # webcam + debug overlay; q or Esc quits
+python -m drowsiness --source 0                    # webcam + debug overlay; q/Esc quits, c recalibrates
 python -m drowsiness --source clip.mp4 --no-display --max-frames 300
 python -m drowsiness --source 0 --log-features out.csv   # per-frame feature CSV
 python -m drowsiness --source 0 --no-perception    # capture only (no model needed)
@@ -48,8 +50,11 @@ python -m drowsiness --config my.yaml              # merged over the defaults
 ```
 
 The overlay shows eye and mouth contours, a head-direction line, EAR (left /
-right = the driver's own eyes), MAR, pitch/yaw/roll and perception time. The
-CSV format is described in [docs/architecture.md](docs/architecture.md).
+right = the driver's own eyes), MAR, pitch/yaw/roll and perception time, and
+top right the driver state, active rules and their timers. Look straight
+ahead with eyes open for the first 5 s (calibration); press `c` to recalibrate,
+e.g. for a new driver. State changes are logged as events. The CSV format and
+the rule conventions are in [docs/architecture.md](docs/architecture.md).
 For low light, set `preprocess.clahe: true` in your config.
 
 Default settings and thresholds are in

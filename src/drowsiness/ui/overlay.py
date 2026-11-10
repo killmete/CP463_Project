@@ -16,7 +16,7 @@ from drowsiness.perception.landmarks import (
     POSE_POINTS,
     RIGHT_EYE_CONTOUR,
 )
-from drowsiness.types import PerceptionOutput
+from drowsiness.types import DriverState, LogicOutput, PerceptionOutput
 
 _FONT = cv2.FONT_HERSHEY_SIMPLEX
 _GREEN, _RED, _YELLOW, _CYAN, _WHITE, _BLACK = (
@@ -28,6 +28,15 @@ _GREEN, _RED, _YELLOW, _CYAN, _WHITE, _BLACK = (
     (0, 0, 0),
 )  # BGR
 _NOSE_LINE_PX = 60.0
+_GREY = (160, 160, 160)
+_STATE_COLORS = {
+    DriverState.CALIBRATING: _GREY,
+    DriverState.NORMAL: _GREEN,
+    DriverState.DROWSY_WARNING: _YELLOW,
+    DriverState.DISTRACTED: _YELLOW,
+    DriverState.NO_FACE: _GREY,
+    DriverState.DROWSY_ALARM: _RED,
+}
 
 
 def draw_status(image: np.ndarray, fps: float, latency_ms: float, budget_ms: float) -> None:
@@ -79,3 +88,28 @@ def draw_perception(image: np.ndarray, out: PerceptionOutput, cfg: OverlayConfig
     cv2.rectangle(image, (0, top - 6), (400, height), _BLACK, thickness=-1)
     for i, text in enumerate(lines):
         cv2.putText(image, text, (8, top + 16 + 22 * i), _FONT, 0.55, _WHITE, 1, cv2.LINE_AA)
+
+
+def draw_logic(image: np.ndarray, out: LogicOutput) -> None:
+    """Debug readout of the logic layer, top right: state, active reasons, key timers.
+
+    Plain text for development; the driver-facing banner and sound are milestone 4.
+    """
+    m = out.metrics
+    lines = [
+        (
+            out.state.value + ("  (recalibrating)" if m.get("calibrating") else ""),
+            _STATE_COLORS[out.state],
+        ),  # fmt: skip
+        (", ".join(out.reasons) or "-", _WHITE),
+        (
+            f"closed {m.get('closed_s', 0.0):4.1f}s  off-road {m.get('off_road_s', 0.0):4.1f}s",
+            _WHITE,
+        ),
+        (f"PERCLOS {_fmt(m.get('perclos'), '5.1%')}  yawns {int(m.get('yawn_count', 0))}", _WHITE),
+    ]
+    width = image.shape[1]
+    left = max(width - 290, 0)
+    cv2.rectangle(image, (left, 0), (width, 10 + 22 * len(lines)), _BLACK, thickness=-1)
+    for i, (text, color) in enumerate(lines):
+        cv2.putText(image, text, (left + 8, 20 + 22 * i), _FONT, 0.55, color, 1, cv2.LINE_AA)
