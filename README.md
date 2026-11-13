@@ -9,11 +9,11 @@ Method: MediaPipe facial landmarks → eye/mouth openness and head pose →
 time-based rules based on PERCLOS and Euro NCAP driver-monitoring
 definitions. See [docs/literature-review.md](docs/literature-review.md).
 
-> Status: milestone 3 – per-frame perception (EAR per eye, MAR, head
-> pitch/yaw/roll) plus detection logic: per-driver calibration, microsleep,
-> sleep, PERCLOS, yawning, head nod, long/short distraction and no-face rules,
-> and a state machine. States and events show in the debug overlay and the log;
-> the driver-facing banner and sound come in milestone 4.
+> Status: milestone 4 – per-frame perception (EAR per eye, MAR, head
+> pitch/yaw/roll), detection logic (per-driver calibration, microsleep, sleep,
+> PERCLOS, yawning, head nod, long/short distraction and no-face rules, state
+> machine) and driver alerts: an on-screen banner, warning/alarm sounds, and
+> cooldown, repeat and escalation. Threshold tuning on datasets is milestone 5.
 
 ## Install
 
@@ -45,6 +45,7 @@ Don't install both.
 python -m drowsiness --source 0                    # webcam + debug overlay; q/Esc quits, c recalibrates
 python -m drowsiness --source clip.mp4 --no-display --max-frames 300
 python -m drowsiness --source 0 --log-features out.csv   # per-frame feature CSV
+python -m drowsiness --source 0 --mute --no-debug  # banner only: no sound, no debug overlay
 python -m drowsiness --source 0 --no-perception    # capture only (no model needed)
 python -m drowsiness --config my.yaml              # merged over the defaults
 ```
@@ -53,8 +54,17 @@ The overlay shows eye and mouth contours, a head-direction line, EAR (left /
 right = the driver's own eyes), MAR, pitch/yaw/roll and perception time, and
 top right the driver state, active rules and their timers. Look straight
 ahead with eyes open for the first 5 s (calibration); press `c` to recalibrate,
-e.g. for a new driver. State changes are logged as events. The CSV format and
-the rule conventions are in [docs/architecture.md](docs/architecture.md).
+e.g. for a new driver. State changes are logged as events.
+
+Alerts: a banner along the bottom tells the driver what was detected and what
+to do (amber for warnings, flashing red for the alarm, with a coloured frame
+border), and a chime or alarm sound plays. The alarm repeats every 2 s until
+the driver recovers; a warning is not re-sounded for the same reason within
+30 s; a third drowsiness warning within 5 minutes is escalated to the alarm
+sound. Sound is generated in code (no audio files); without an audio device the
+alerts are visual only. Timings are in the `alerts:` section of the config. The
+CSV format, the rule conventions and the alert policy are in
+[docs/architecture.md](docs/architecture.md).
 For low light, set `preprocess.clahe: true` in your config.
 
 Default settings and thresholds are in

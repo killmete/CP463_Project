@@ -28,6 +28,7 @@ pip install -e . --no-deps
 python -m drowsiness.perception.fetch_model      # models/face_landmarker.task (gitignored)
 python -m drowsiness --source 0                 # webcam + debug overlay (q/Esc quits, c recalibrates)
 python -m drowsiness --source clip.mp4 --no-display --max-frames 300 --log-features out.csv
+python -m drowsiness --source 0 --mute --no-debug # banner only (no sound, no debug overlay)
 python -m drowsiness --source 0 --no-perception # capture only
 pytest -q        # DROWSINESS_CAMERA_TESTS=1: webcam tests; DROWSINESS_PERF_SOURCE=<img|clip>: face speed check
 ruff check . && ruff format --check .
@@ -124,6 +125,7 @@ Changing these requires `system-architect` sign-off and updating every caller.
    `docs/architecture.md` for conventions and the CSV format).
 3. Rules: eye closure, PERCLOS, yawn, nod, looking away, no face + calibration
    (done; conventions in `docs/architecture.md`).
-4. Alerts: overlay banner, sound, cooldown/escalation.
+4. Alerts: overlay banner, sound, cooldown/escalation (done; policy in
+   `docs/architecture.md`).
 5. Evaluation on public datasets + own clips; threshold tuning; report.
 6. (Optional) CNN eye-state model, night/IR robustness, notifications.

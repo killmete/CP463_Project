@@ -89,3 +89,22 @@ perception:
 overlay:                 # debug overlay drawn in the display window
   landmarks: true        # eye/mouth contours and head direction
   values: true           # EAR, MAR, pitch/yaw/roll, perception time
+  logic: true            # driver state, active rules and timers (top right)
+                         # --no-debug turns all three off; the alert banner always shows
+
+alerts:                  # how logic's states/events reach the driver (milestone 4)
+                         # timings are UX starting points, to check in M5
+  sound: true            # false or --mute: visual only
+  volume: 0.5            # (0, 1]
+  sample_rate: 22050
+  cooldown_s: 30.0       # the same warning reason is not sounded again within this time
+  warning_repeat_s: 10.0 # chime again while a warning state persists
+  alarm_repeat_s: 2.0    # sound again while DROWSY_ALARM persists
+  escalation_count: 3    # sounded drowsiness warnings ...
+  escalation_window_s: 300.0  # ... within this window -> alarm-style presentation
+  rearm_s: 3.0           # a reason that eased must stay gone this long before its
+                         # return is announced again (no alarms from a flickering signal)
+  info_display_s: 3.0    # how long an INFO message (e.g. calibrated) stays up
+  flash_hz: 2.0          # ALARM banner flash rate, at most 3 (photosensitivity)
+  webhook_url: null      # http(s) URL to POST alerts to; null = off
+  webhook_timeout_s: 2.0

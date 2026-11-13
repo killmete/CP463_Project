@@ -9,10 +9,10 @@ from __future__ import annotations
 from drowsiness.config import Config
 from drowsiness.logic.calibration import Calibration, Calibrator
 from drowsiness.logic.rules import REASON_STATE, REASONS, RuleEngine
-from drowsiness.logic.state_machine import StateMachine
+from drowsiness.logic.state_machine import LEVEL, StateMachine
 from drowsiness.types import AlertEvent, AlertLevel, DriverState, FrameFeatures, LogicOutput
 
-__all__ = ["REASONS", "REASON_STATE", "Calibration", "DriverMonitor"]
+__all__ = ["LEVEL", "REASONS", "REASON_STATE", "Calibration", "DriverMonitor"]
 
 
 class DriverMonitor:
