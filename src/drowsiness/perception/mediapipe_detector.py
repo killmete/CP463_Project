@@ -6,14 +6,33 @@ This is the only module that imports mediapipe; it is imported lazily by
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
-
-import mediapipe as mp
-import numpy as np
-from mediapipe.tasks.python import BaseOptions, vision
 
 from drowsiness.config import PerceptionConfig
 from drowsiness.perception.base import LandmarkResult
+
+
+def _guard_audio_import() -> None:
+    """`import mediapipe` also imports its audio tasks, which import sounddevice.
+
+    mediapipe only tolerates sounddevice failing with ImportError/OSError, but on Linux
+    without an audio server PortAudio raises PortAudioError at import time. Mark the
+    module as unavailable so mediapipe skips it (we never use its audio tasks).
+    """
+    try:
+        import sounddevice  # noqa: F401
+    except (ImportError, OSError):
+        pass  # mediapipe handles these itself
+    except Exception:  # PortAudioError: no usable audio backend
+        sys.modules["sounddevice"] = None  # type: ignore[assignment]
+
+
+_guard_audio_import()
+
+import mediapipe as mp  # noqa: E402
+import numpy as np  # noqa: E402
+from mediapipe.tasks.python import BaseOptions, vision  # noqa: E402
 
 
 class MediaPipeDetector:
