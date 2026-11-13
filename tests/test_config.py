@@ -74,6 +74,14 @@ def test_overrides_win_over_file(tmp_path: Path):
         ({"signals": {"max_gap_s": 2.5}}, "max_gap_s < no_face.timeout_s"),
         ({"calibration": {"max_attempts": 0}}, "max_attempts"),
         ({"state_machine": {"clear_s": -1}}, "clear_s"),
+        ({"alerts": {"volume": 1.5}}, "alerts.volume"),
+        ({"alerts": {"volume": 0}}, "alerts.volume"),
+        ({"alerts": {"flash_hz": 5.0}}, "flash_hz"),
+        ({"alerts": {"alarm_repeat_s": 12.0}}, "alarm_repeat_s < alerts.warning_repeat_s"),
+        ({"alerts": {"escalation_count": 1}}, "escalation_count"),
+        ({"alerts": {"webhook_url": "ftp://x"}}, "webhook_url"),
+        ({"alerts": {"sound": "on"}}, "expected bool"),
+        ({"overlay": {"logic": 1}}, "expected bool"),
     ],
 )
 def test_invalid_config_raises(overrides, message):

@@ -7,6 +7,7 @@ import pytest
 
 from conftest import ClipSpec
 from drowsiness import app as app_module
+from drowsiness.alerts import AlertManager, LogSink
 from drowsiness.app import FpsMeter, main, run_loop
 from drowsiness.capture import CameraError, FrameSource, VideoFileSource
 from drowsiness.config import load_config
@@ -193,8 +194,37 @@ def test_run_loop_runs_logic_and_counts_events(synthetic_clip: Path, clip_spec, 
         Perception(NeverFace(), cfg.preprocess) as perception,
     ):
         monitor = DriverMonitor(cfg)
+        alerts = AlertManager(cfg.alerts, [LogSink()])
         with caplog.at_level("INFO", logger="drowsiness"):
-            stats = run_loop(source, cfg, display=False, perception=perception, monitor=monitor)
+            stats = run_loop(
+                source, cfg, False, None, perception, None, monitor, alerts
+            )  # fmt: skip
     assert monitor.state == DriverState.NO_FACE  # no face for > 2 s, even while calibrating
     assert stats.alert_events == 1
+    assert stats.alerts_sounded == 1  # the NO_FACE warning chime
     assert "NO_FACE (no_face)" in caplog.text
+
+
+def test_main_builds_alerts_with_perception_and_respects_mute(monkeypatch, synthetic_clip):
+    cfg_preprocess = load_config().preprocess
+    monkeypatch.setattr(
+        app_module, "build_perception", lambda cfg: Perception(NeverFace(), cfg_preprocess)
+    )
+    built = []
+    real_build = app_module.build_alerts
+
+    def spy(cfg):
+        built.append(cfg)
+        return real_build(cfg)
+
+    monkeypatch.setattr(app_module, "build_alerts", spy)
+    args = ["--source", str(synthetic_clip), "--no-display", "--mute", "--no-debug"]
+    assert main(args) == 0
+    (cfg,) = built
+    assert cfg.alerts.sound is False
+    assert (cfg.overlay.landmarks, cfg.overlay.values, cfg.overlay.logic) == (False,) * 3
+
+
+def test_capture_only_has_no_alerts(monkeypatch, synthetic_clip):
+    monkeypatch.setattr(app_module, "build_alerts", lambda cfg: pytest.fail("alerts built"))
+    assert main(["--source", str(synthetic_clip), *CAPTURE_ONLY, "--max-frames", "3"]) == 0

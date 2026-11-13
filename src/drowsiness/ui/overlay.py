@@ -17,6 +17,7 @@ from drowsiness.perception.landmarks import (
     RIGHT_EYE_CONTOUR,
 )
 from drowsiness.types import DriverState, LogicOutput, PerceptionOutput
+from drowsiness.ui.banner import banner_height
 
 _FONT = cv2.FONT_HERSHEY_SIMPLEX
 _GREEN, _RED, _YELLOW, _CYAN, _WHITE, _BLACK = (
@@ -74,7 +75,7 @@ def draw_perception(image: np.ndarray, out: PerceptionOutput, cfg: OverlayConfig
 
     if not cfg.values:
         return
-    height = image.shape[0]
+    height = image.shape[0] - banner_height(image)  # keep clear of the alert banner
     if not f.face_found:
         cv2.putText(image, "NO FACE", (8, height - 12), _FONT, 0.9, _RED, 2, cv2.LINE_AA)
         return
@@ -93,7 +94,7 @@ def draw_perception(image: np.ndarray, out: PerceptionOutput, cfg: OverlayConfig
 def draw_logic(image: np.ndarray, out: LogicOutput) -> None:
     """Debug readout of the logic layer, top right: state, active reasons, key timers.
 
-    Plain text for development; the driver-facing banner and sound are milestone 4.
+    Plain text for development; the driver sees the banner (ui/banner.py).
     """
     m = out.metrics
     lines = [

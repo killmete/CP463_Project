@@ -44,7 +44,8 @@ def test_no_face_label_is_red():
 
 def test_overlay_can_be_turned_off():
     image = blank()
-    off = load_config(overrides={"overlay": {"landmarks": False, "values": False}}).overlay
+    flags = {"landmarks": False, "values": False, "logic": False}
+    off = load_config(overrides={"overlay": flags}).overlay
     draw_perception(image, face_output(), off)
     assert not image.any()
 

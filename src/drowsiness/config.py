@@ -137,6 +137,24 @@ class PerceptionConfig:
 class OverlayConfig:
     landmarks: bool
     values: bool
+    logic: bool
+
+
+@dataclass(frozen=True, slots=True)
+class AlertsConfig:
+    sound: bool
+    volume: float
+    sample_rate: int
+    cooldown_s: float
+    warning_repeat_s: float
+    alarm_repeat_s: float
+    escalation_count: int
+    escalation_window_s: float
+    rearm_s: float
+    info_display_s: float
+    flash_hz: float
+    webhook_url: str | None
+    webhook_timeout_s: float
 
 
 @dataclass(frozen=True, slots=True)
@@ -155,6 +173,7 @@ class Config:
     preprocess: PreprocessConfig
     perception: PerceptionConfig
     overlay: OverlayConfig
+    alerts: AlertsConfig
 
 
 def load_config(
@@ -257,6 +276,7 @@ def _check_semantics(config: Config) -> None:
         ("perclos.warning", config.perclos.warning),
         ("perclos.alarm", config.perclos.alarm),
         ("perclos.min_valid_ratio", config.perclos.min_valid_ratio),
+        ("alerts.volume", config.alerts.volume),
         ("perception.min_face_detection_confidence", p.min_face_detection_confidence),
         ("perception.min_face_presence_confidence", p.min_face_presence_confidence),
         ("perception.min_tracking_confidence", p.min_tracking_confidence),
@@ -275,3 +295,12 @@ def _check_semantics(config: Config) -> None:
         raise ConfigError("config.eyes.closed_ear_fraction: must be < 1")
     if not config.signals.max_gap_s < config.no_face.timeout_s:
         raise ConfigError("config: expected signals.max_gap_s < no_face.timeout_s")
+    a = config.alerts
+    if a.flash_hz > 3:
+        raise ConfigError("config.alerts.flash_hz: must be <= 3 (photosensitivity limit)")
+    if not a.alarm_repeat_s < a.warning_repeat_s:
+        raise ConfigError("config: expected alerts.alarm_repeat_s < alerts.warning_repeat_s")
+    if a.escalation_count < 2:
+        raise ConfigError("config.alerts.escalation_count: must be >= 2")
+    if a.webhook_url is not None and not a.webhook_url.startswith(("http://", "https://")):
+        raise ConfigError("config.alerts.webhook_url: must start with http:// or https://")
