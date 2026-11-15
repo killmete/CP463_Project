@@ -129,8 +129,8 @@ already produces.
 | **YawDD** [D3] | 322 + 29 in-car videos: talking, singing, yawning; varied eyewear | Yawn / MAR evaluation; talking is a false-positive test |
 | **DMD** [D4] | Originally 37 drivers, 41 h of RGB, depth and IR. Since a 2026 revision only RGB real-car video from 14 subjects is unrestricted | Distraction / gaze evaluation |
 | **MRL Eye / CEW** [M1][M2] | Eye crops labelled open or closed; MRL includes glasses and varied lighting | Training the optional eye-state CNN (approach C) |
-| **Own recordings** | Team webcam clips following a fixed script, under bright, normal, low-light and night-like lighting, with and without glasses | **Night and glasses robustness** (replaces NTHU-DDD); our exact camera setup |
-| ~~NTHU-DDD~~ [V5] | Acted drowsiness, day/night, glasses | **Not used.** Access needs a signed agreement emailed to the lab, with replies taking months. Cited only for other papers' results (§2D) |
+| **NTHU-DDD** [V5] | Acted drowsiness, active-IR video (day and night), glasses / sunglasses, per-frame labels | **Night (IR) and glasses** drowsiness evaluation (official copy, obtained under the lab's license). Acted, so it complements UTA-RLDD |
+| **Own recordings** | Team webcam clips following a fixed script, under bright, normal, low-light and night-like lighting, with and without glasses | Our exact camera setup; low light and glasses on our webcam; false-alarm checks |
 
 Access details, usage rules and the recording plan are in
 [dataset-access.md](dataset-access.md).

@@ -5,25 +5,25 @@ downloading. Fill in everything in `[brackets]`.
 
 ## Summary
 
-We only use datasets we can download straight away, plus our own recordings.
+We use datasets we can download straight away, NTHU-DDD (obtained under the
+lab's signed license, 2026-11), and our own recordings.
 
 | Dataset | Used for | How to get it | Size | Action |
 |---|---|---|---|---|
 | **UTA-RLDD** | Main drowsiness eval (real, not acted) | Direct Google Drive link | 111.3 GB | Download (§1) |
+| **NTHU-DDD** | Drowsiness with per-frame labels; **IR video, night and glasses** | Signed license from the lab | – | **Have it** (official copy) |
 | **DMD** (drowsiness + distraction parts) | Distraction / gaze eval | Direct download, 18+, academic only | not stated | Download (§1) |
 | **YawDD** | Yawn / MAR eval; varied eyewear | Free IEEE account login | 4.94 GB | Download (§1) |
 | **MRL Eye** | Train eye-state CNN (optional); includes glasses, varied lighting | Public download | ~85k images | Download (§1) |
 | **CEW** | Train/test eye-state CNN (optional) | Direct Google Drive links | 2.6–20 MB | Download (§1) |
-| **Own recordings** | **Night-like / low light, glasses**, our exact camera setup | Record ourselves | – | Plan (§3) + consent form (§4) before recording |
+| **Own recordings** | Our exact camera setup; low light and glasses on our webcam; false-alarm checks | Record ourselves | – | Plan (§3) + consent form (§4) before recording |
 
-### Not used: NTHU-DDD
-NTHU-DDD needs a signed license agreement emailed to the lab, and replies can
-take months (one user reported waiting more than 4 months). That doesn't fit a
-course timeline, so we don't use it. It was the only dataset covering night
-driving and glasses for drowsiness, so **our own recordings cover those
-conditions instead** (§3). Don't substitute the Kaggle "NTHU-DDD2" re-upload:
-the official data appears to be under a non-disclosure agreement, so the copy
-may not be legitimate.
+### NTHU-DDD: official copy only
+NTHU-DDD needs a signed license agreement emailed to the lab. We dropped it while
+waiting for a reply, then received the official copy (2026-11), so it is back in
+use. It is the only dataset here with **infrared night driving and glasses** for
+drowsiness, and it has per-frame labels. Use only the copy obtained under the
+license; never the Kaggle "NTHU-DDD2" re-upload, and never share ours.
 
 ---
 
@@ -37,6 +37,26 @@ may not be legitimate.
 - Use the dataset's own 5 folds: one fold for testing, the other four for
   training. Splits are by person.
 - Questions: Reza Ghoddoosian, `reza_ghoddoosian@honda-ri.com`.
+
+### NTHU-DDD (Driver Drowsiness Detection, NTHU CV Lab)
+- Already obtained under the lab's license. Keep the license email/agreement with
+  the team lead, and follow its terms where they are stricter than §2.
+- Store it in `data/nthu-ddd/` (git-ignored), keeping the original folder structure.
+- Content (checked against our copy, 7 GB): all video is **active-infrared** (IR),
+  640×480; night scenarios are 15 FPS, the others 30 FPS. Scenarios: noglasses,
+  glasses, sunglasses, night_noglasses, night_glasses.
+  - **Training** (18 subjects, 356 AVI): 4 clips per scenario: `yawning`,
+    `slowBlinkWithNodding`, `sleepyCombination`, `nonsleepyCombination`
+    (talking, laughing, looking aside). Subject 005 has no night_glasses clips.
+  - **Evaluation** (4 subjects, 20 MP4): one `mix` clip per scenario.
+  - **Testing** (14 subjects, 70 MP4): one `mix` clip per scenario.
+- Labels: one digit per frame. Training and evaluation have four files per clip:
+  `drowsiness` (0 still / 1 drowsy), `eye` (1 sleepy eyes), `head` (1 nodding,
+  2 looking aside), `mouth` (1 yawning, 2 talking/laughing). Testing has
+  `drowsiness` only. The lab's evaluation code (C/Matlab) is included.
+- Use training + evaluation for tuning and testing for the final numbers. Split
+  by subject, never by frame.
+- Drowsiness is **acted**, so it complements UTA-RLDD (real) rather than replacing it.
 
 ### DMD (Driver Monitoring Dataset)
 - Page: <https://dmd.vicomtech.org/> → "Download Complete Dataset". It has
@@ -74,6 +94,7 @@ may not be legitimate.
 | Dataset | Commercial use | Redistribute / share link | Show faces in report or slides | Citation required |
 |---|---|---|---|---|
 | UTA-RLDD | Not stated – treat as no | Not stated – treat as no | **Only 36 of 60 participants** allowed it; identities must never be revealed | Yes |
+| NTHU-DDD | No (license agreement) | **No** | **No** unless the license allows it | Yes |
 | DMD | No (CC BY-NC-ND 4.0) | No modified copies | Allowed subjects only | Yes |
 | YawDD | Research use | Not stated – treat as no | **Only videos not marked "No"** in Participants Information | Yes |
 | MRL Eye | Check page | Check page | – | Yes |
@@ -98,6 +119,9 @@ Practical rules:
 - **YawDD:** S. Abtahi, M. Omidyeganeh, S. Shirmohammadi, B. Hariri, "YawDD: A
   Yawning Detection Dataset," Proc. ACM Multimedia Systems, 2014, pp. 24–28,
   doi:10.1145/2557642.2563678.
+- **NTHU-DDD:** C.-H. Weng, Y.-H. Lai, S.-H. Lai, "Driver Drowsiness Detection via
+  a Hierarchical Temporal Deep Belief Network," ACCV 2016 Workshops (use the
+  citation the lab's license asks for, if different).
 - **CEW:** F. Song, X. Tan, X. Liu, S. Chen, "Eyes Closeness Detection from Still
   Images with Multi-scale Histograms of Principal Oriented Gradients," Pattern
   Recognition, 2014.
@@ -107,8 +131,9 @@ Practical rules:
 
 ## 3. Own recordings – plan
 
-These clips replace NTHU-DDD for **night-like lighting and glasses**, and are the
-only data from our exact camera setup.
+These are the only data from our exact camera and room setup. NTHU-DDD covers
+infrared night driving and glasses; these clips add low light and glasses on our
+own webcam, plus false-alarm checks (talking, mirror glances) no dataset labels.
 
 ### Setup
 - **Camera:** the webcam we'll demo with, placed like a dashcam: in front of
@@ -157,9 +182,9 @@ wear them.
   recording to make this quick.
 
 ### Known limitation
-None of our data includes true **infrared** night video (what real in-car night
-cameras use). Our "night-like" clips are dim visible-light video. Say so in the
-report.
+Only NTHU-DDD has true **infrared** night video (what real in-car night cameras
+use). Our own "night-like" clips are dim visible-light video. Report the two
+separately.
 
 ---
 
