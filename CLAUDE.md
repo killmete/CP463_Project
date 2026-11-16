@@ -32,6 +32,7 @@ python -m drowsiness --source 0 --mute --no-debug # banner only (no sound, no de
 python -m drowsiness --source 0 --no-perception # capture only
 pytest -q        # DROWSINESS_CAMERA_TESTS=1: webcam tests; DROWSINESS_PERF_SOURCE=<img|clip>: face speed check
 ruff check . && ruff format --check .
+python -m eval.extract --workers 8 && python -m eval.tune --workers 16 && python -m eval.report --workers 16  # M5 eval (data/ needed; see eval/README.md)
 ```
 
 ## Pipeline
@@ -127,5 +128,7 @@ Changing these requires `system-architect` sign-off and updating every caller.
    (done; conventions in `docs/architecture.md`).
 4. Alerts: overlay banner, sound, cooldown/escalation (done; policy in
    `docs/architecture.md`).
-5. Evaluation on public datasets + own clips; threshold tuning; report.
+5. Evaluation on public datasets + own clips; threshold tuning; report (done on
+   NTHU-DDD, DMD, YawDD and UTA-RLDD; own clips not recorded yet; results in
+   `eval/reports/m5-evaluation.md`, applied values in `docs/architecture.md`).
 6. (Optional) CNN eye-state model, night/IR robustness, notifications.
