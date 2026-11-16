@@ -9,11 +9,11 @@ Method: MediaPipe facial landmarks → eye/mouth openness and head pose →
 time-based rules based on PERCLOS and Euro NCAP driver-monitoring
 definitions. See [docs/literature-review.md](docs/literature-review.md).
 
-> Status: milestone 4 – per-frame perception (EAR per eye, MAR, head
-> pitch/yaw/roll), detection logic (per-driver calibration, microsleep, sleep,
-> PERCLOS, yawning, head nod, long/short distraction and no-face rules, state
-> machine) and driver alerts: an on-screen banner, warning/alarm sounds, and
-> cooldown, repeat and escalation. Threshold tuning on datasets is milestone 5.
+> Status: milestone 5. Perception (EAR per eye, MAR, head pose), detection logic
+> (per-driver calibration, microsleep, sleep, PERCLOS, yawning, head nod,
+> long/short distraction and no-face rules, state machine), driver alerts (banner,
+> sound, cooldown and escalation), and an evaluation on four public datasets with
+> tuned thresholds. Project report: [docs/report.md](docs/report.md).
 
 ## Install
 
