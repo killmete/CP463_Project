@@ -288,4 +288,24 @@ Rules:
 - Tuning only *proposes* values (`eval/reports/proposed_config.yaml`).
   `default_config.yaml` changes only after a person reviews the report.
 
+Applied after review (2026-11-16):
+
+| Value | Old | New | Test split, old → new |
+|---|---:|---:|---|
+| `eyes.closed_ear_fraction` | 0.15 | 0.2 | DMD eye F1 0.76 → 0.80, long closures caught 26% → 39% |
+| `yawn.mar_threshold` | 0.6 | 0.35 | YawDD yawning clips caught 59% → 87% |
+| `yawn.min_duration_s` | 1.0 | 0.75 | (with the line above) |
+
+Trade-off accepted: drowsiness alert episodes on test non-drowsy clips rise from 2.08/h to
+3.87/h. That is 3.4 h of video and about 6 extra alerts, most of them on DMD. On the tune
+split the rise is 2.05 → 2.86/h.
+
+Not applied:
+- `head_nod.pitch_delta_deg` 2: at the grid edge and within head-pose noise, with no
+  test labels to check it.
+- `distraction.pitch_deg` 20: a gain of only +0.01 F1.
+- `perclos.warning` 0.12: no test-split gain, and it adds false alarms.
+
+`eval/reports/` still compares the original defaults with the full proposal.
+
 See `eval/README.md` for commands, label mapping and metric definitions.
