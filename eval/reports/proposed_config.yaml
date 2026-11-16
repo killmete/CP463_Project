@@ -1,0 +1,14 @@
+# Proposed by eval/tune.py on the tune split. Review eval/reports/ before
+# copying any value into src/drowsiness/default_config.yaml.
+distraction:
+  pitch_deg: 20.0
+eyes:
+  closed_ear_fraction: 0.2
+head_nod:
+  min_duration_s: 1.5
+  pitch_delta_deg: 2.0
+perclos:
+  warning: 0.12
+yawn:
+  mar_threshold: 0.35
+  min_duration_s: 0.75

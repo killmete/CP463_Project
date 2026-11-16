@@ -268,3 +268,24 @@ reason, level}` for each sounded WARNING/ALARM announcement, using `urllib` with
 - The INFO `recalibrating` event shows no toast (the "Calibrating" bar already does), and
   the `cleared` event never replaces a toast.
 - The webhook payload also carries `escalated`.
+
+## Evaluation (milestone 5)
+
+`eval/` is an offline package. Nothing in `src/drowsiness/` imports it. It has four stages:
+1. **extract:** perception, once per clip, to feature CSV v1;
+2. **replay:** features through the real `DriverMonitor`, so no logic is re-implemented;
+3. **tune:** a grid search on the tune split;
+4. **report:** default vs proposed config on the tune and test splits.
+
+Rules:
+- Splits are by subject.
+- The test split is never used for tuning.
+- Euro NCAP timings (`eyes.microsleep_s`, `eyes.sleep_s`, `distraction.long_s`, short
+  distraction) and `eyes.closed_ratio` (the P80 definition) are definitions, not
+  detector settings, so they are not tuned.
+- A tuned value may not raise drowsiness or distraction alert episodes on non-drowsy
+  clips by more than 1 per hour over the original defaults.
+- Tuning only *proposes* values (`eval/reports/proposed_config.yaml`).
+  `default_config.yaml` changes only after a person reviews the report.
+
+See `eval/README.md` for commands, label mapping and metric definitions.

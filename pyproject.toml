@@ -39,13 +39,14 @@ drowsiness = ["*.yaml"]
 [tool.ruff]
 target-version = "py311"
 line-length = 100
-src = ["src", "tests"]
+src = ["src", "tests", "."]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]  # the eval/ scripts are imported by tests/eval
 markers = [
     "camera: needs a real webcam (set DROWSINESS_CAMERA_TESTS=1 to run)",
     "model: needs models/face_landmarker.task (skipped if missing unless DROWSINESS_REQUIRE_MODEL=1)",
