@@ -28,8 +28,8 @@ calibration:
 
 eyes:
   closed_ratio: 0.2      # PERCLOS-P80: closed when EAR < closed + 0.2 * (open - closed)  (§6)
-  closed_ear_fraction: 0.15  # calibration sees open eyes only: closed EAR ~ 0.15 x open
-                         # (a MediaPipe blink measured ~0.03 vs open ~0.28; starting point)
+  closed_ear_fraction: 0.2   # calibration sees open eyes only: closed EAR ~ 0.2 x open
+                         # (tuned on DMD in milestone 5, was 0.15; see eval/reports/)
   ear_fallback_closed: 0.21  # absolute threshold if calibration is skipped (starting point)
   microsleep_s: 1.5      # warning (§6)
   sleep_s: 3.0           # alarm, Euro NCAP "sleep" > 3 s (§3)
@@ -41,8 +41,8 @@ perclos:
   min_valid_ratio: 0.5   # no PERCLOS until half the window has valid eye data
 
 yawn:
-  mar_threshold: 0.6     # starting point
-  min_duration_s: 1.0
+  mar_threshold: 0.35    # tuned in milestone 5 (was 0.6; labelled yawns median MAR ~0.46)
+  min_duration_s: 0.75   # tuned in milestone 5 (was 1.0)
   count_window_s: 300.0
   warning_count: 3
 

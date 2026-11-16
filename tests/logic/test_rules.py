@@ -59,8 +59,9 @@ def test_perclos_waits_for_enough_valid_data():
     assert "perclos" not in outs[-1].metrics
 
 
-@pytest.mark.parametrize("seconds, counted", [(0.9, False), (1.1, True)])
-def test_yawn_duration_boundary(seconds, counted):
+@pytest.mark.parametrize("offset, counted", [(-0.1, False), (0.1, True)])
+def test_yawn_duration_boundary(offset, counted):
+    seconds = config().yawn.min_duration_s + offset
     outs = run(Seq().calibrate().yawn(seconds).open(1).frames)
     assert outs[-1].metrics["yawn_count"] == (1.0 if counted else 0.0)
 
