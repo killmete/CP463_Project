@@ -19,8 +19,9 @@ microsleep, a high PERCLOS, frequent yawning, head nodding) or inattention
   them as an on-screen banner and warning or alarm sounds, with cooldown and
   escalation.
 
-**Speed:** about 5 ms per frame on a laptop-class CPU (p95 5.5 ms at 640×480),
-a tenth of our 50 ms budget.
+**Speed:** about 5 ms per frame on a desktop CPU with no GPU (p95 5.5 ms at
+640×480), a tenth of our 50 ms budget. Nothing is trained, and the model file is
+3.6 MB.
 
 **Evaluation**
 - Data: 1040 clips (54.8 h) from four public datasets: NTHU-DDD, DMD, YawDD and
@@ -38,9 +39,15 @@ a tenth of our 50 ms budget.
 | UTA-RLDD drowsy vs alert, separated by mean PERCLOS | AUC 0.80 |
 | Drowsiness alert episodes on non-drowsy clips | 3.9 per hour |
 
+**Against a simpler baseline:** one fixed eye threshold for every driver catches
+more closures, but raises 2–6× as many false alarms. Per-driver calibration is
+the better trade-off.
+
 **Weakest parts**
 - Head-nod detection (event F1 0.13–0.19).
 - Look-aside detection from head pose alone (frame F1 0.41).
+- One driver whose eyelid landmarks never close, which causes most missed
+  closures on test.
 
 ## 1. Introduction
 
@@ -61,6 +68,26 @@ We added four requirements of our own:
 - **CPU only:** it must run without a GPU.
 - **Measured:** it must be evaluated on public data with a protocol that
   doesn't leak subjects between tuning and testing.
+
+**Users**
+- **Primary:** drivers of older cars without a built-in driver-monitoring
+  system, using a laptop or a cheap dashcam-style webcam.
+- **Secondary:** small fleet operators (delivery, ride-hailing) who want a
+  low-cost aftermarket monitor. The optional webhook can log alerts centrally.
+
+**Success criteria**
+
+| # | Criterion | Target | Result | Met? |
+|---|---|---|---|---|
+| 1 | Real-time on CPU | ≥ 20 FPS and < 50 ms per frame | 171 FPS, p95 5.5 ms (Section 4) | yes |
+| 2 | Alert delay | sound queued ≤ 0.5 s after a rule fires | same frame (Section 3.5) | yes |
+| 3 | Standard timings | microsleep, sleep and distraction inside Euro NCAP ranges | 1.5 s, 3 s, 3 s, 10 s in 30 s (Section 2) | yes |
+| 4 | Fewer misses than the starting thresholds | held-out detection metrics improve after tuning | eye F1 0.76 → 0.80, yawning clips caught 59% → 87% (Section 5.4) | yes |
+| 5 | False alarms stay low | ≤ 1 more alert episode per hour than the starting thresholds | +0.8/h on tune, but +1.8/h on test (Section 5.4) | **no, on test** |
+| 6 | Generalise across eyewear and lighting | no condition far below the rest | sunglasses and one DMD subject fail (Section 6) | partly |
+
+Criteria 1–3 were fixed at the start of the project. Criteria 4–6 were set when we
+designed the evaluation (milestone 5), before any thresholds were tuned.
 
 ## 2. Background and choice of method
 
@@ -261,6 +288,28 @@ We ran the full pipeline (capture, perception, logic, alerts) on 600 frames of a
 The budget was 50 ms per frame and an alert within about 0.5 s. The alert sound
 is queued on the same frame the rule fires.
 
+**Cost**
+
+| Item | Value |
+|---|---|
+| Hardware | one desktop PC: 16-core / 32-thread AMD CPU, 15 GB RAM, no GPU used |
+| Model | MediaPipe Face Landmarker, 3.6 MB file, used as is (no training or fine-tuning) |
+| Training time | none: the rules have no learned weights. "Training" is the threshold grid search below |
+| Live inference | 4.9 ms per frame (p50), one process |
+| Feature extraction (all datasets) | 5.46 M frames in 25.3 CPU-process hours: about 3.2 h of wall time on 8 parallel processes (17 ms per frame per process under contention), about 0.9 GB RAM each |
+| Threshold tuning | about 4 min for 113 grid points × up to 700 clips (16 processes), because it replays saved features instead of video |
+| Report generation | about 1 min |
+| Money | nothing beyond our own PC: no cloud, no API calls |
+
+**Reproducibility**
+- The whole evaluation is deterministic: replays use frame timestamps, logic has
+  no randomness, and the grid search is exhaustive. Rerunning gives the same
+  numbers.
+- The one random draw (dot jitter in one chart) uses a fixed seed (0).
+- Every threshold is in `default_config.yaml`. The tuning result is saved in
+  `eval/reports/tuning.json`.
+- The commands to rebuild every figure and table are in `eval/README.md`.
+
 ## 5. Evaluation
 
 ### 5.1 Datasets
@@ -393,11 +442,54 @@ DMD, eyes-closed frame F1, by session group:
 |---:|---:|---:|---:|---:|
 | 0.97 | 0.99 | 0.93 | 0.27 | 0.87 |
 
-Group gE is an outlier and needs a closer look.
+Group gE is an outlier. Section 6.3 explains it.
+
+### 5.5 Baseline: one fixed threshold for everyone
+
+Our design calibrates each driver's open-eye EAR. The simpler alternative uses one
+absolute EAR threshold for every driver (0.21, a common value). We ran it by forcing
+calibration to fall back, keeping everything else the same. The neutral head pose is
+still measured.
+
+| Metric | Test: fixed threshold | Test: ours | Tune: fixed threshold | Tune: ours |
+|---|---:|---:|---:|---:|
+| Eyes closed, frame F1 (DMD) | **0.92** | 0.80 | 0.88 | **0.95** |
+| Long closures caught (DMD) | **96%** | 39% | **100%** | 80% |
+| NTHU drowsy frames, F1 | 0.68 | 0.64 | 0.70 | 0.60 |
+| UTA PERCLOS AUC, drowsy vs alert | **0.90** | 0.80 | 0.86 | 0.80 |
+| UTA alert videos with a PERCLOS alert | 0% | 0% | 23% | **4%** |
+| Drowsiness alert episodes/h, non-drowsy clips | 8.33 | **3.87** | 17.99 | **2.86** |
+
+The simple baseline catches more closures, but it raises 2.2× (test) to 6.3× (tune)
+as many false alarms. On tune it also alerts on almost a quarter of the videos where
+the driver is alert.
+
+An alert that fires every few minutes on an alert driver gets switched off, so we
+keep per-driver calibration. The missed closures it causes come almost entirely from
+one subject (Section 6.3). A better eye-state signal, rather than a fixed threshold,
+is the fix.
+
+### 5.6 Ablation: one change at a time
+
+Each tuned value was applied alone to the starting thresholds and replayed on the
+held-out non-drowsy and calm clips (3.4 h). This is how we chose which values to
+keep.
+
+| Configuration | Drowsiness alerts/h | Effect on detection (test) |
+|---|---:|---|
+| Starting thresholds | 2.08 | – |
+| + `eyes.closed_ear_fraction` 0.2 | 2.68 | eye F1 0.76 → 0.80, closures caught 26% → 39% |
+| + `yawn.mar_threshold` 0.35 | 2.68 | yawning clips caught 59% → 87% (with the duration change) |
+| + `yawn.min_duration_s` 0.75 | 2.08 | |
+| + `perclos.warning` 0.12 | 2.98 | no test gain: **not applied** |
+| + `head_nod.pitch_delta_deg` 2 | 2.98 | no test labels to check, and within head-pose noise: **not applied** |
+| + `distraction.pitch_deg` 20 | 2.08 | look-aside F1 +0.01: **not applied** |
+| **Applied set (eye + yawn)** | **3.87** | |
+| All proposed changes | 4.76 | |
 
 ## 6. Discussion
 
-### What works
+### 6.1 What works
 - **Eye closure:** frame F1 is 0.93–0.95 on the tune split and 0.80 on the test
   split. The P80 rule, calibrated per driver, tracks real eye closure well.
 - **PERCLOS on real drowsiness:** it separates drowsy from alert UTA-RLDD videos
@@ -406,7 +498,7 @@ Group gE is an outlier and needs a closer look.
   yawns. Most of the gain came from fixing a threshold that was too high.
 - **Speed:** far beyond real time on a CPU.
 
-### What doesn't work well yet
+### 6.2 What doesn't work well yet
 - **Head nods:**
   - Event F1 is only 0.13–0.19.
   - Labelled nods drop the head a median of only 8.5°, against our 15°
@@ -421,7 +513,7 @@ Group gE is an outlier and needs a closer look.
   - Many labelled "not looking at the road" frames in DMD involve only small
     head movements.
 - **Long closures on held-out DMD:** only 39% are caught, compared with 80% on
-  the tune split. The test set is small: 23 events from 5 subjects.
+  the tune split. One driver causes almost all of the gap (Section 6.3).
 - **False alarms:**
   - With the applied thresholds there are 2.9 (tune) to 3.9 (test) drowsiness
     alert episodes per hour of non-drowsy driving. We accepted this in return
@@ -434,7 +526,118 @@ Group gE is an outlier and needs a closer look.
   from 20–30 s YawDD clips where drivers glance around the car. UTA-RLDD alone
   gives about 4–6 per hour.
 
-### Dataset caveats
+### 6.3 Error analysis
+
+We sorted every miss and every false alarm by what caused it. The checks were run on
+the replayed features with the applied thresholds; the counts below are aggregate
+only.
+
+**Missed long closures (DMD, test split: 14 of 23 missed)**
+
+| Cause | Count |
+|---|---:|
+| Eyes judged open: EAR stayed above the closed threshold | 12 |
+| Closure broken into pieces shorter than 1.5 s | 2 |
+| Face lost, or head turned away | 0 |
+
+- **One driver:** 11 of the 14 misses come from one driver, DMD subject 29
+  (session group gE).
+- **Why:** for that driver, MediaPipe's eyelid landmarks never come fully
+  together. Eyes labelled closed still measure 0.45 × the driver's open EAR.
+  Our P80 cut-off is 0.36 × open. For the other DMD groups, labelled-closed eyes
+  measure 0.10–0.20 × open, well below the cut-off.
+- **Without that driver,** 9 of 11 test closures are caught (82%), the same as on
+  tune (80%).
+- **What would fix it:** a landmark geometry rule cannot see this closure. The
+  fixed-threshold baseline happens to catch it (0.45 × 0.27 ≈ 0.12 < 0.21), but
+  over-fires on everyone else (Section 5.5). An appearance-based eye-state CNN
+  is the planned fix (Section 7).
+
+**Missed yawns (NTHU-DDD and DMD labels)**
+
+| Cause | Test (11 of 21 missed) | Tune (99 of 775 missed) |
+|---|---:|---:|
+| Mouth open above the MAR threshold, but for less than 0.75 s | 7 | 58 |
+| Mouth never opened past the MAR threshold | 4 | 41 |
+| Face lost (e.g. a hand over the mouth) | 0 | 0 |
+
+Most misses are short or half-open yawns, not detection failures. Lowering the
+thresholds further would catch them, but tuning showed the false yawns from talking
+rise faster than the hits.
+
+**False drowsiness alerts on non-drowsy clips: what set them off**
+
+| Trigger | Test (13 episodes in 3.4 h) | Tune (39 episodes in 13.7 h) |
+|---|---:|---:|
+| Microsleep (eyes closed ≥ 1.5 s) | 5 | 13 |
+| PERCLOS warning | 4 | 9 |
+| Yawning (third yawn in 5 min) | 4 | 4 |
+| Head nod | 0 | 12 |
+| PERCLOS alarm | 0 | 1 |
+
+- **Where they happen:** most are on DMD distraction sessions, where drivers look
+  down at the radio or a phone. Looking down most likely narrows the eyes in the
+  image, so it reads as closed eyes, or as a nod.
+- **What they suggest:** in the next version, a closure or nod rule should not
+  fire while the head is pitched down with gaze off-road. This needs the gaze
+  feature (Section 7).
+
+### 6.4 Bias across groups
+
+We checked yawn detection on YawDD yawning clips by sex and eyewear, across all
+subjects, with 95% Wilson intervals. YawDD records only binary sex, and the
+groups are small.
+
+| Group | Yawning clips with a yawn detected |
+|---|---|
+| Male | 68 / 73 = 93% (85–97%) |
+| Female | 56 / 71 = 79% (68–87%) |
+| No glasses | 69 / 80 = 86% (77–92%) |
+| Glasses | 40 / 46 = 87% (74–94%) |
+| Sunglasses | 12 / 13 = 92% (67–99%) |
+
+- **Sex:** the difference between men and women is 14 points. The intervals only
+  just overlap, so the difference is plausibly real.
+- **A possible cause:** MAR is a ratio of mouth height to width, so drivers who
+  yawn with a narrower opening reach the threshold less often.
+- **Eyewear:** it doesn't affect yawn detection.
+- **Eye-closure rules:** these are hurt by sunglasses. NTHU-DDD sunglasses clips
+  score 0.50 drowsy-frame F1, against 0.62–0.71 for the other conditions
+  (Section 5.4).
+- **Not tested:** we could not test skin tone or age, because none of the
+  datasets labels them.
+
+### 6.5 Overfitting and data leakage
+
+**Subject leakage**
+- All splits are by subject. A unit test checks the split rule, and we checked
+  the full catalogue: no subject is in both splits.
+- The remaining risk is YawDD's two camera folders, which number subjects
+  separately (Section 6.6).
+
+**Test-set use in model selection**
+- The grid search used the tune split only.
+- But deciding which tuned values to *keep* looked at test-split false alarms
+  (Section 5.6). So the final test numbers are slightly optimistic.
+- A fully clean protocol would need a third, untouched split. We judged the data
+  too small for that: the test split has only 21 labelled yawns and 23 labelled
+  closures.
+
+**Why tune and test differ**
+
+| Measure | Tune | Test (95% CI) |
+|---|---|---|
+| Yawn recall | 87% (84–89%) | 48% (28–68%) |
+| Closure recall | 80% (68–89%) | 39% (22–59%) |
+
+Both gaps are mostly *distribution shift*, not overfitting of thresholds:
+- **Yawns:** tune yawns are almost all from NTHU-DDD. Test yawns are only from
+  DMD, because NTHU-DDD's testing set has no yawn labels.
+- **Closures:** the closure gap is one driver (Section 6.3).
+- **The yawn change still helped on test:** YawDD yawning clips caught went from
+  59% to 87%, close to the tune value of 87%.
+
+### 6.6 Dataset caveats
 - **NTHU-DDD's "sleepy eyes" label marks *drooping* eyes.** On those frames the
   eyes are still about 77% open, so eye thresholds were tuned on DMD, whose
   labels mark fully closed eyes.
@@ -445,14 +648,15 @@ Group gE is an outlier and needs a closer look.
 - **Calibration period not scored:** yawns in a clip's first 5 s fall inside
   calibration and are never scored.
 
-### Limitations
+### 6.7 Limitations
 - **No recordings of our own yet.** We planned scripted webcam clips covering
   our exact setup, low light and glasses. All results come from public data
   with different cameras.
 - **No visible-light night recordings were tested.** NTHU-DDD covers night only
   with active-IR video.
-- **Unchecked literature figures:** some numbers in the literature review come
-  from secondary sources and still need checking against the primary papers.
+- **Unchecked literature figures:** every figure used in this report was checked
+  against its original source. A few numbers in the literature review that the
+  report doesn't use are still unchecked (see its Section 7).
 
 ## 7. Conclusion and future work
 
@@ -464,18 +668,27 @@ Group gE is an outlier and needs a closer look.
 - driver alerts with escalation;
 - a reproducible pipeline that evaluates it on 55 hours of public video.
 
-**What the evaluation showed:** eye closure, PERCLOS and yawning work well, and
-tuning on held-out data improved them. Head-nod and gaze-based distraction
-detection are the clear weak points.
+**What the evaluation showed**
+- Eye closure, PERCLOS and yawning work well. Tuning on the tune split improved
+  them on the held-out test split.
+- Per-driver calibration costs a few missed closures compared with a fixed
+  threshold, but cuts false alarms by 2–6×.
+- Head-nod and look-away detection are the clear weak points.
+- Most misses have a concrete, identified cause: one driver whose eyelid landmarks
+  never close, yawns that are short or half-open, and false alarms when the
+  driver looks down.
 
 **Next steps, in order of expected value:**
 1. Record our own scripted clips (webcam, low light, glasses), to measure false
    alarms in our real setup.
-2. Add iris-based gaze to the distraction rule.
-3. Replace the fixed-angle nod rule with one based on pitch velocity, or with
+2. Add iris-based gaze to the distraction rule. Also use it to stop closure
+   and nod rules firing while the driver looks down at the radio or a phone,
+   the main source of false alarms (Section 6.3).
+3. Train a small eye-state CNN on MRL Eye for drivers whose eyelid landmarks
+   never fully close (Section 6.3), sunglasses and odd head angles, where EAR
+   is weakest.
+4. Replace the fixed-angle nod rule with one based on pitch velocity, or with
    the planned blink and head-motion LSTM trained on UTA-RLDD.
-4. Train a small eye-state CNN on MRL Eye for sunglasses and odd head angles,
-   where EAR is weakest.
 
 ## References
 
@@ -503,3 +716,17 @@ here were checked against the original papers or their official records in
 November 2026. The full
 evaluation output is in `eval/reports/m5-evaluation.md`, and the evaluation
 method in `eval/README.md`.
+
+## Appendix: where each grading criterion is covered
+
+This project is in the "other AI" track: rules on top of a pretrained landmark
+model, with no agent.
+
+| Criterion | Evidence in this report |
+|---|---|
+| A1 Problem and goal | Section 1: problem, users, success criteria with targets and results |
+| A2 Design and rationale | Section 2: approaches compared and why the simpler or heavier ones were rejected. Section 5.5: measured against a simpler fixed-threshold baseline |
+| A3 Implementation and demo | Sections 3–4; `README.md` (install and run); live webcam demo (`python -m drowsiness --source 0`). Reproducibility: Section 4 |
+| A4 Evaluation | Section 5: subject-level tune/test split, metrics chosen for alerting, baseline (5.5), ablation (5.6), per-condition results |
+| A5 Risks and failure modes | Section 6.3 error analysis with real cases; 6.4 bias; 6.5 overfitting and leakage; 6.6–6.7 caveats and limitations |
+| A6 Cost and engineering | Section 4: speed, model size, hardware, extraction and tuning time, money |
