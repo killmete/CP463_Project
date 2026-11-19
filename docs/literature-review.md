@@ -34,7 +34,7 @@ The rest of this review covers vision-based methods only.
   that the eyes are at least 80% closed (the "P80" definition, from a 1994
   simulator study) [P2]. In Dinges' validation work it was the only measure
   tested that correlated highly with attention lapses on a reaction-time test
-  (PVT), with mean r ≈ 0.88 [P3]. That correlation was higher than drivers'
+  (PVT), with mean r = 0.875 [P3]. That correlation was higher than drivers'
   own sleepiness ratings. A 2023 review cautions that PERCLOS can miss
   moderate drowsiness and is less reliable on real roads than in lab
   vigilance tests [P4].
@@ -113,10 +113,13 @@ EU rules have required drowsiness detection in all new vehicles since 2024
 
 | Event | Euro NCAP definition |
 |---|---|
-| **Long distraction** | One glance away from the road lasting ≥ 3 s |
-| **Short / visual time-sharing distraction** | ≥ 10 s looking away in total within a 30 s window |
-| **Microsleep** | Brief eye closure (< 3 s; about 1–2 s is the usual example) |
-| **Sleep** | Eye closure > 3 s |
+| **Long distraction** | One glance away from the road lasting 3–4 s |
+| **Short / visual time-sharing distraction** | 10 s looking away in total within a 30 s window |
+| **Microsleep** | Eye closure of 1–2 s |
+| **Sleep** | Continuous eye closure of 3 s or more |
+
+(Checked against the Euro NCAP Driver Engagement protocol and SD-202, both v1.2,
+July 2026.)
 
 These definitions use head pose and gaze plus eye closure, which approach A
 already produces.
@@ -194,9 +197,12 @@ Evaluation protocol, given the leakage concerns above:
   calibrated open, i.e. `EAR < closed + 0.2 × (open − closed)`.
 
 ## 7. Limitations of this review
-- Several figures come from secondary sources, reviews or preprints. Before
-  citing them in the final report, check them against the primary papers,
-  especially the 99%+ NTHU-DDD claims and the original 1994 P80 study.
+- Several figures come from secondary sources, reviews or preprints. The ones
+  used in `docs/report.md` were checked in November 2026: Euro NCAP timings,
+  the PERCLOS validation (r = 0.875), the PERCLOS review [P4], the CPU speed in
+  [V2], the personalised-threshold gain in [M1] and the EU requirement. Still
+  unchecked and not used in the report: the 99%+ NTHU-DDD claims, the YOLO
+  figures and the original 1994 P80 study.
 - Default thresholds (EAR ratio, MAR, angles) are starting points. The
   `data-eval-engineer` agent must tune them on our own data.
 - None of our evaluation data includes true infrared night video, which real
@@ -217,7 +223,7 @@ Evaluation protocol, given the leakage concerns above:
 **Eye closure and PERCLOS**
 - [P1] [Soukupová & Čech, Real-Time Eye Blink Detection using Facial Landmarks (CVWW 2016)](https://vision.fe.uni-lj.si/cvww2016/proceedings/papers/05.pdf)
 - [P2] [Drowsiness Metrics and Thresholds: The Search for Valid and Reliable Standards (VT)](https://vtechworks.lib.vt.edu/items/ad3c3cb5-061d-43e6-b329-b338bbe305cc)
-- [P3] [Evaluation of techniques for drowsiness detection (Drexel dissertation)](https://researchdiscovery.drexel.edu/esploro/outputs/doctoral/Evaluation-of-techniques-for-drowsiness-detection/991021889097704721)
+- [P3] [Dinges et al., Evaluation of Techniques for Ocular Measurement as an Index of Fatigue and as the Basis for Alertness Management (NHTSA, 1998)](https://rosap.ntl.bts.gov/view/dot/2518)
 - [P4] [PERCLOS review (PMC, 2023)](https://pmc.ncbi.nlm.nih.gov/articles/PMC10108649/)
 
 **Implementations (MediaPipe)**
@@ -246,3 +252,5 @@ Evaluation protocol, given the leakage concerns above:
 **Regulation and standards**
 - [R1] [Euro NCAP SD-202 Driver Monitoring Test Procedure v1.2](https://cdn.euroncap.com/cars/assets/SD_202_Driver_Monitoring_Test_Procedure_v1_2_d3420cb629.pdf)
 - [R2] [European NCAP Program Developments to Address Driver Distraction, Drowsiness and Sudden Sickness (PMC)](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC10790826/)
+- [R3] [Euro NCAP Safe Driving Driver Engagement Protocol v1.2](https://cdn.euroncap.com/cars/assets/Euro_NCAP_Protocol_Safe_Driving_Driver_Engagement_v1_2_ebce03a443.pdf)
+- [E1] [Regulation (EU) 2019/2144, General Safety Regulation](https://eur-lex.europa.eu/eli/reg/2019/2144/eng)

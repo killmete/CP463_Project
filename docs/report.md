@@ -44,9 +44,10 @@ a tenth of our 50 ms budget.
 
 ## 1. Introduction
 
-Drowsy and distracted driving cause a large share of road crashes. Since 2024, EU
-rules have required drowsiness warning systems in all new vehicles [S6]. The
-Euro NCAP safety rating also scores driver-monitoring systems [R1][R2].
+Drowsy and distracted driving cause a large share of road crashes. EU rules have
+required a driver drowsiness and attention warning system in all new cars and
+commercial vehicles since 7 July 2024 [E1]. The Euro NCAP safety rating also
+scores driver-monitoring systems [R1][R3].
 
 The project brief asked for a system that:
 - takes video from one RGB camera at 20–30 FPS;
@@ -76,24 +77,27 @@ The full literature review is in `docs/literature-review.md`. In short:
 | Facial landmarks + geometric features + time rules | **Chosen.** Real time on CPU, covers every behaviour we need, needs no training, every alert can be explained |
 | Landmarks + learned temporal model (e.g. blink-sequence LSTM [D2]) | Planned upgrade for *early* drowsiness. Needs labelled sequences and reacts over minutes |
 | Eye-state CNN on eye crops | Planned upgrade if EAR fails on glasses, pose or night video |
-| End-to-end deep video models (CNN-LSTM, two-stream, transformers) | Rejected. Far below real time on CPU [V2]. Their high NTHU-DDD scores are often frame-level without subject-disjoint splits, so they can't be compared fairly [V5] |
+| End-to-end deep video models (CNN-LSTM, two-stream, transformers) | Rejected. Far below real time on CPU: one multi-granularity CNN-LSTM runs at 37 FPS on a GPU but about 3 FPS on a CPU [V2]. Many published NTHU-DDD scores don't state a subject-disjoint protocol, so they can't be compared fairly |
 | Object detectors (YOLO family) | Rejected. A per-frame detector still needs all the timing logic built on top |
 
 What the chosen method rests on:
 - **Eye Aspect Ratio (EAR):** Soukupová and Čech reduce six eye landmarks to one
   openness value. It is enough for real-time blink detection [P1].
-- **PERCLOS-P80:** the share of a minute that the eyes are at least 80% closed.
-  It is the most validated eye-based drowsiness measure [P2][P3]. It can
-  under-detect moderate drowsiness on real roads [P4], which is why we added
-  further cues.
-- **Euro NCAP timings [R1]:**
+- **PERCLOS-P80:** the share of a minute that the eyes are at least 80% closed
+  [P2]. In an NHTSA validation study it was the only measure tested that tracked
+  attention lapses consistently (mean r = 0.875 with lapses on a reaction-time
+  test) [P3]. A 2023 review notes it can fail to respond to moderate drowsiness
+  and is less reliable in real driving than in lab tests [P4], which is why we
+  added further cues.
+- **Euro NCAP timings** (Driver Engagement protocol and SD-202 test procedure,
+  v1.2) [R1][R3]:
 
-  | Event | Definition |
-  |---|---|
-  | Microsleep | Eyes closed for a short time; we use 1.5 s |
-  | Sleep | Eyes closed > 3 s |
-  | Long distraction | One glance away from the road ≥ 3 s |
-  | Short distraction | ≥ 10 s away from the road in total within 30 s |
+  | Event | Euro NCAP definition | Our setting |
+  |---|---|---|
+  | Microsleep | Eye closure of 1–2 s | 1.5 s |
+  | Sleep | Continuous eye closure of 3 s or more | 3 s |
+  | Long distraction | One glance away from the road of 3–4 s | 3 s |
+  | Short distraction (visual attention time sharing) | 10 s away from the road in total within 30 s | 10 s in 30 s |
 
 ## 3. System design
 
@@ -152,7 +156,7 @@ they behave the same at 15 and 30 FPS.
 | Rule | Condition | Result |
 |---|---|---|
 | Microsleep | eyes closed ≥ 1.5 s | drowsy warning |
-| Sleep | eyes closed > 3 s | drowsy alarm |
+| Sleep | eyes closed ≥ 3 s | drowsy alarm |
 | PERCLOS | share of the last 60 s with eyes P80-closed ≥ 0.15 / 0.25 | warning / alarm |
 | Yawning | ≥ 3 yawns in 5 min (mouth open above MAR 0.35 for ≥ 0.75 s) | drowsy warning |
 | Head nod | head ≥ 15° below neutral for ≥ 1 s, eyes not clearly open | drowsy warning |
@@ -477,23 +481,25 @@ detection are the clear weak points.
 
 - [S1] A Survey on Drowsiness Detection – Modern Applications and Methods, 2024.
 - [S3] A Review of Recent Developments in Driver Drowsiness Detection Systems, *Sensors*, 2022.
-- [S6] Driver drowsiness detection (overview of the EU requirement), Wikipedia.
+- [E1] Regulation (EU) 2019/2144 (General Safety Regulation): driver drowsiness and attention warning required for new vehicle types from 6 July 2022 and for all new vehicles from 7 July 2024.
 - [P1] T. Soukupová and J. Čech, "Real-Time Eye Blink Detection using Facial Landmarks," CVWW 2016.
 - [P2] Drowsiness Metrics and Thresholds: The Search for Valid and Reliable Standards, Virginia Tech.
-- [P3] Evaluation of techniques for drowsiness detection, Drexel University dissertation.
-- [P4] PERCLOS review, PMC, 2023.
-- [R1] Euro NCAP, SD-202 Driver Monitoring Test Procedure v1.2.
-- [R2] European NCAP Program Developments to Address Driver Distraction, Drowsiness and Sudden Sickness, PMC.
+- [P3] D. F. Dinges, M. M. Mallis, G. Maislin and J. W. Powell, "Evaluation of Techniques for Ocular Measurement as an Index of Fatigue and as the Basis for Alertness Management," NHTSA final report, April 1998.
+- [P4] T. Abe, "PERCLOS-based technologies for detecting drowsiness: current evidence and future directions," *Sleep Advances*, 2023.
+- [R1] Euro NCAP, Technical Bulletin SD 202, Driver Monitoring Test Procedure, version 1.2, July 2026.
+- [R3] Euro NCAP, Safe Driving Driver Engagement Protocol, version 1.2, July 2026.
 - [I3] Google, MediaPipe Face Landmarker documentation.
-- [K1] Y. Kartynnik et al., "Real-time Facial Surface Geometry from Monocular Video on Mobile GPUs," CVPR Workshops 2019.
-- [M1] Improving Driver Drowsiness Detection via Personalized EAR/MAR Thresholds and CNN-Based Classification, arXiv 2604.22479.
-- [V2] Long-term Multi-granularity Deep Framework for Driver Drowsiness Detection, arXiv 1801.02325.
-- [V5] NTHU-DDD dataset overview.
-- [N1] C.-H. Weng, Y.-H. Lai and S.-H. Lai, "Driver Drowsiness Detection via a Hierarchical Temporal Deep Belief Network," ACCV 2016 Workshops (NTHU-DDD).
+- [K1] Y. Kartynnik, A. Ablavatski, I. Grishchenko and M. Grundmann, "Real-time Facial Surface Geometry from Monocular Video on Mobile GPUs," CVPR Workshops 2019 (arXiv 1907.06724).
+- [M1] G. Ersoy, M. A. Tatar, E. Tonbul and S. Kırbız, "Improving Driver Drowsiness Detection via Personalized EAR/MAR Thresholds and CNN-Based Classification," arXiv 2604.22479, 2026.
+- [V2] "Long-term Multi-granularity Deep Framework for Driver Drowsiness Detection," arXiv 1801.02325, 2018.
+- [N1] C.-H. Weng, Y.-H. Lai and S.-H. Lai, "Driver Drowsiness Detection via a Hierarchical Temporal Deep Belief Network," ACCV 2016 Workshops, LNCS 10118, Springer, 2017 (NTHU-DDD).
 - [D2] R. Ghoddoosian, M. Galib and V. Athitsos, "A Realistic Dataset and Baseline Temporal Model for Early Drowsiness Detection," CVPR Workshops 2019 (UTA-RLDD).
-- [D3] S. Abtahi et al., "YawDD: A Yawning Detection Dataset," ACM MMSys 2014.
+- [D3] S. Abtahi, M. Omidyeganeh, S. Shirmohammadi and B. Hariri, "YawDD: A Yawning Detection Dataset," ACM MMSys 2014, pp. 24–28.
 - [D4] J. D. Ortega et al., "DMD: A Large-Scale Multi-Modal Driver Monitoring Dataset for Attention and Alertness Analysis," ECCV Workshops 2020.
 
-Links for the bracketed sources are in `docs/literature-review.md`. The full
+Links for most bracketed sources are in `docs/literature-review.md`. Euro NCAP
+figures were checked against the v1.2 documents (July 2026); the other figures used
+here were checked against the original papers or their official records in
+November 2026. The full
 evaluation output is in `eval/reports/m5-evaluation.md`, and the evaluation
 method in `eval/README.md`.
