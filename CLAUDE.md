@@ -7,11 +7,14 @@ visible).
 
 ## Chosen method (see `docs/literature-review.md`)
 Facial landmarks (MediaPipe Face Landmarker) → geometric features
-(EAR, MAR, head pose, gaze) → time-based rules aligned with PERCLOS and Euro
-NCAP driver-monitoring definitions, with per-driver calibration. Planned
-upgrades if evaluation shows they're needed:
-1. a lightweight eye-state CNN (trained on MRL Eye) to replace or fuse with EAR;
-2. a small blink-sequence LSTM (trained on UTA-RLDD) for early drowsiness.
+(EAR, MAR, head pose) → time-based rules aligned with PERCLOS and Euro
+NCAP driver-monitoring definitions, with per-driver calibration. Distraction
+uses head pose only: iris gaze is not implemented (`FrameFeatures.gaze` is always
+`None`). Planned upgrades, in the order the M5 evaluation suggests:
+1. iris-based gaze for the distraction rules (look-aside F1 is only 0.41);
+2. a better head-nod signal (pitch velocity or a learned model; nod F1 0.13–0.19);
+3. a lightweight eye-state CNN (trained on MRL Eye) to replace or fuse with EAR;
+4. a small blink-sequence LSTM (trained on UTA-RLDD) for early drowsiness.
 
 End-to-end deep video models were rejected: too slow on CPU, and their
 reported benchmark numbers can't be compared fairly.
@@ -40,18 +43,18 @@ python -m eval.extract --workers 8 && python -m eval.tune --workers 16 && python
 FrameSource ──(frame, t)──▶ Perception ──FrameFeatures──▶ Logic ──DriverState/AlertEvent──▶ Alerts
  capture/                    perception/                   logic/                           alerts/, ui/
  (camera, video file)        (landmarks, EAR, MAR,         (calibration, PERCLOS,           (overlay, sound,
-                              head pose, gaze)              rules, state machine)            console, webhook)
+                              head pose)                    rules, state machine)            console, webhook)
 ```
 `app.py` wires the stages; it contains no detection rules.
 
-## Layout (planned)
+## Layout
 ```
 src/drowsiness/
   types.py          # shared contracts – owned by system-architect
   config.py         # loads default_config.yaml (+ user YAML)
   app.py            # main loop + CLI  (python -m drowsiness)
   capture/          # FrameSource: CameraSource, VideoFileSource
-  perception/       # LandmarkDetector, features.py (EAR/MAR/pose/gaze)
+  perception/       # LandmarkDetector, features.py (EAR/MAR/pose; gaze not yet)
   logic/            # calibration, signals, rules, state_machine
   alerts/           # AlertManager, sinks, messages
   ui/               # overlay drawing
@@ -67,7 +70,8 @@ data/, models/      # gitignored
   `grabbed_at` (perf_counter at grab, latency measurement only).
 - `FrameFeatures`: `timestamp` (s, monotonic), `face_found`, `ear_left`,
   `ear_right` (driver's own eyes), `mar`, `pitch`, `yaw`, `roll` (degrees,
-  uncalibrated), optional `gaze`, `blendshapes`. Missing values are `None`.
+  uncalibrated), optional `gaze` (reserved, not computed yet), `blendshapes`.
+  Missing values are `None`.
 - `PerceptionOutput`: `features`, `landmarks` ((478, 3) pixels, or None),
   `perception_ms`. Only `features` goes to logic.
 - `LogicOutput`: `state`, `events` (on transitions, plus INFO calibration events), `reasons` (active,

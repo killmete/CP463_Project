@@ -53,6 +53,8 @@ enabled. `face_found` is 0/1; `None` is an empty cell; floats are written with
 `repr()` so they round-trip exactly. The reader rebuilds `FrameFeatures`
 (ignores `frame_index` and `perception_ms`); no `bs_*` columns or all empty
 -> `blendshapes=None`. Blendshape names outside the fixed list are not written.
+`gaze_h` and `gaze_v` are reserved for iris gaze, which is not implemented yet, so they
+are always empty.
 
 ## Logic (milestone 3)
 Method: `docs/literature-review.md` §2A (EAR, PERCLOS-P80, MAR, head pose), §3
