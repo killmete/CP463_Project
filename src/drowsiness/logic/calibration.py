@@ -16,6 +16,8 @@ from drowsiness.types import FrameFeatures
 
 
 @dataclass(frozen=True, slots=True)
+# ค่าฐานของคนขับคนนี้: EAR ตอนลืมตาแต่ละข้าง และมุมหัวตอนมองตรง (neutral)
+# fallback=True = calibrate ไม่สำเร็จ ใช้เกณฑ์ตายตัวแทน
 class Calibration:
     ear_open_left: float | None
     """Median open EAR of the driver's left eye; None in fallback mode."""
@@ -28,6 +30,7 @@ class Calibration:
     """True when calibration failed: absolute EAR threshold, zero pose offsets."""
 
     @classmethod
+    # ค่าสำรองเมื่อ calibrate ล้มเหลว: ไม่มี EAR ฐาน, ใช้มุมหัวที่วัดได้ (ถ้ามี) ไม่งั้นเป็น 0
     def fallback_values(
         cls, valid_ratio: float = 0.0, pose: tuple[float, float, float] | None = None
     ) -> Calibration:
@@ -36,6 +39,8 @@ class Calibration:
         return cls(None, None, pitch, yaw, roll, valid_ratio, fallback=True)
 
 
+# เก็บข้อมูลช่วง calibrate (คนขับมองตรง ลืมตา) แล้วหาค่ากลางด้วย median
+# ลองได้หลายครั้ง (max_attempts) ถ้ายังไม่ได้ใช้ค่าสำรอง
 class Calibrator:
     """Collects one attempt at a time; retries up to `max_attempts`, then falls back."""
 
@@ -49,20 +54,24 @@ class Calibrator:
         self.last_valid_ratio = 0.0
         self.last_pose: tuple[float, float, float] | None = None
 
+    # รับทีละเฟรม: คืน None ระหว่างเก็บ, คืน Calibration เมื่อจบ
     def update(self, f: FrameFeatures) -> Calibration | None:
         """Feed one frame. Returns a Calibration when finished (success or fallback)."""
         if self._start is None:
             self._start = f.timestamp
         self._frames += 1
+        # เก็บเฉพาะเฟรมที่เห็นหน้าและมีค่าครบ; มุมหัวเก็บแยกไว้ใช้ตอน fallback
         values = (f.ear_left, f.ear_right, f.pitch, f.yaw, f.roll)
         if f.face_found and all(v is not None for v in values):
             self._valid.append(values)  # type: ignore[arg-type]
         pose = (f.pitch, f.yaw, f.roll)
         if f.face_found and all(v is not None for v in pose):
             self._poses.append(pose)  # type: ignore[arg-type]
+        # ยังไม่ครบเวลา calibrate -> รอต่อ
         if f.timestamp - self._start < self.cfg.duration_s:
             return None
 
+        # ครบเวลา: ลองสรุปผล ถ้าไม่ผ่านและครบจำนวนครั้ง -> fallback, ไม่งั้นเริ่มรอบใหม่
         self.attempts += 1
         result = self._finish()
         if result is not None:
@@ -72,6 +81,7 @@ class Calibrator:
         self._start, self._frames, self._valid, self._poses = None, 0, [], []  # retry
         return None
 
+    # สรุปผล 1 รอบ: คืน None ถ้าข้อมูลไม่พอหรือตาไม่ได้เปิด
     def _finish(self) -> Calibration | None:
         self.last_valid_ratio = len(self._valid) / self._frames if self._frames else 0.0
         if self._frames and len(self._poses) / self._frames >= self.cfg.min_valid_frames_ratio:
@@ -80,9 +90,11 @@ class Calibrator:
             self.last_pose = (pitch, yaw, roll)
         if self.last_valid_ratio < self.cfg.min_valid_frames_ratio:
             return None
+        # median ของแต่ละคอลัมน์: ทนต่อการกระพริบตาและค่าผิดปกติ ดีกว่าค่าเฉลี่ย
         left, right, pitch, yaw, roll = (
             statistics.median(col) for col in zip(*self._valid, strict=True)
         )
+        # EAR ต่ำเกินไป = ตาไม่ได้เปิดตอน calibrate (หรือ landmark ผิด) -> ไม่ผ่าน
         if min(left, right) < self.cfg.min_open_ear:
             return None  # eyes were not open (or landmarks failed) during calibration
         return Calibration(left, right, pitch, yaw, roll, self.last_valid_ratio)

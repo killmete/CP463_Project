@@ -22,6 +22,7 @@ from drowsiness.logic.calibration import Calibration
 from drowsiness.logic.signals import Condition, EventTimes, MedianSmoother, TimeWindow
 from drowsiness.types import DriverState, FrameFeatures
 
+# เหตุผลแต่ละข้อ -> สถานะที่ทำให้เกิด เรียงจากรุนแรงที่สุดไปน้อยสุด
 REASON_STATE: dict[str, DriverState] = {
     "sleep": DriverState.DROWSY_ALARM,
     "perclos_alarm": DriverState.DROWSY_ALARM,
@@ -40,6 +41,7 @@ def _mean(values: list[float]) -> float | None:
     return sum(values) / len(values) if values else None
 
 
+# ใช้กฎทั้ง 9 ข้อกับแต่ละเฟรม คืนรายการเหตุผลที่เกิดขึ้น + ค่าสำหรับแสดงผล
 class RuleEngine:
     """Turns FrameFeatures into active reasons and live metrics, given a calibration."""
 
@@ -47,6 +49,7 @@ class RuleEngine:
         self.cfg = cfg
         sig = cfg.signals
         gap = sig.max_gap_s
+        # ตัวทำให้ค่าเรียบ, เงื่อนไขตามเวลา, หน้าต่างเวลา PERCLOS/มองนอกถนน, ตัวนับหาว
         self._eye_smoother = MedianSmoother(sig.smoothing_s)
         self._mouth_smoother = MedianSmoother(sig.smoothing_s)
         self._eyes_closed = Condition(gap, True, sig.carry_min_s, sig.max_carry_s)
@@ -66,6 +69,7 @@ class RuleEngine:
         self._prev_closed: bool | None = None
         self._prev_off_road: bool | None = None
 
+    # ล้างตัวจับเวลาทั้งหมด (ใช้หลัง recalibrate)
     def reset(self) -> None:
         for part in (
             self._eye_smoother, self._mouth_smoother, self._eyes_closed, self._mouth_open,
@@ -78,12 +82,14 @@ class RuleEngine:
         self._missing_since = self._no_face_start = None
         self._prev_t = self._prev_closed = self._prev_off_road = None
 
+    # ระหว่าง calibrate ครั้งแรก ใช้แค่กฎไม่เห็นหน้า
     def update_no_face_only(self, f: FrameFeatures) -> tuple[list[str], dict[str, float]]:
         """During calibration only the no-face rule runs (there is no baseline yet)."""
         no_face_s = self._update_no_face(f)
         reasons = ["no_face"] if no_face_s >= self.cfg.no_face.timeout_s else []
         return reasons, {"no_face_s": no_face_s}
 
+    # ใช้กฎครบทุกข้อกับ 1 เฟรม (ต้องมี calibration แล้ว)
     def update(self, f: FrameFeatures, cal: Calibration) -> tuple[list[str], dict[str, float]]:
         t, cfg = f.timestamp, self.cfg
         metrics: dict[str, float] = {}
@@ -97,6 +103,7 @@ class RuleEngine:
         metrics["no_face_s"] = no_face_s
 
         # Eyes: openness relative to the calibrated open EAR, mean of available eyes.
+        # ความเปิดของตา = EAR / EAR ตอนลืมตาของคนนี้ แล้วทำให้เรียบ
         openness = self._eye_smoother.update(t, self._openness(f, cal) if f.face_found else None)
         if openness is None:
             closed_now = None
@@ -105,6 +112,7 @@ class RuleEngine:
         else:
             frac = cfg.eyes.closed_ear_fraction
             closed_now = openness < frac + cfg.eyes.closed_ratio * (1.0 - frac)  # P80
+        # ตาปิดต่อเนื่องมากี่วินาที (ใช้กับกฎ sleep และ microsleep)
         closed = self._eyes_closed.update(t, closed_now)
         closed_s = self._eyes_closed.duration(t)
         metrics["closed_s"] = closed_s
@@ -112,6 +120,7 @@ class RuleEngine:
             metrics["eye_openness"] = openness
 
         # PERCLOS-P80 over the window, once enough of it is known.
+        # PERCLOS = สัดส่วนเวลาตาปิดใน window คำนวณเมื่อมีข้อมูลพอเท่านั้น
         closed_total, known_total = self._perclos.totals(t)
         perclos = None
         if known_total >= cfg.perclos.min_valid_ratio * cfg.perclos.window_s:
@@ -119,6 +128,7 @@ class RuleEngine:
             metrics["perclos"] = perclos
 
         # Mouth: a yawn is MAR above threshold for min_duration_s, counted once per opening.
+        # หาว = MAR เกินเกณฑ์นาน >= min_duration_s นับ 1 ครั้งต่อการอ้าปาก 1 ครั้ง
         mar = self._mouth_smoother.update(t, f.mar if f.face_found else None)
         mouth_open = self._mouth_open.update(
             t, None if mar is None else mar > cfg.yawn.mar_threshold
@@ -139,6 +149,8 @@ class RuleEngine:
             metrics["pitch_delta_deg"], metrics["yaw_delta_deg"] = pitch_d, yaw_d
         # Nod: head dropped while the eyes are not confidently open. Head down with
         # open eyes (e.g. looking at a phone) is left to the distraction rules.
+        # ผงกหัว = หัวก้มต่ำกว่าปกติ และตาไม่ได้เปิดชัดเจน
+        # (ก้มแต่ลืมตา เช่นดูโทรศัพท์ ให้กฎมองนอกถนนจัดการ)
         dropped_now = None
         if pitch_d is not None:
             dropped_now = pitch_d < -cfg.head_nod.pitch_delta_deg and closed is not False
@@ -147,6 +159,7 @@ class RuleEngine:
         metrics["nod_s"] = nod_s
         # Off-road: head turned or tilted beyond the limits, with eyes not closed
         # (closed eyes are drowsiness, handled above).
+        # มองนอกถนน = หันหรือก้ม/เงยเกินเกณฑ์ (ตาปิดไม่นับ เพราะเป็นเรื่องง่วง)
         off_now = None
         if pitch_d is not None and yaw_d is not None:
             turned = (
@@ -160,6 +173,8 @@ class RuleEngine:
         off_total, _ = self._off_road_window.totals(t)
         # Short distraction is a one-shot trigger (Euro NCAP): once it has fired, the
         # window restarts after the driver has been back on the road for clear_s.
+        # มองนอกถนนสะสมเกินเกณฑ์ใน window -> short distraction (เตือนครั้งเดียว)
+        # เริ่มนับใหม่เมื่อกลับมามองถนนครบ clear_s
         if off_total >= cfg.distraction.short_total_s:
             self._short_fired = True
         if off_road is False:
@@ -172,10 +187,12 @@ class RuleEngine:
         metrics["off_road_s"], metrics["off_road_total_s"] = off_road_s, off_total
 
         # Carried values are inferred, not observed: keep them out of the windows.
+        # จำค่าเฟรมนี้ไว้เติมหน้าต่างเวลาในเฟรมหน้า (ค่าที่ carry ไม่นับเพราะเดาเอา)
         self._prev_t = t
         self._prev_closed = None if self._eyes_closed.carrying else closed
         self._prev_off_road = None if self._off_road.carrying else off_road
 
+        # ตรวจกฎทั้ง 9 ข้อ แล้วคืนเฉพาะข้อที่เป็นจริง เรียงตามความรุนแรง
         active = {
             "sleep": closed_s > cfg.eyes.sleep_s,
             "perclos_alarm": perclos is not None and perclos >= cfg.perclos.alarm,
@@ -190,12 +207,15 @@ class RuleEngine:
         return [r for r in REASONS if active[r]], metrics
 
     @staticmethod
+    # fallback: ใช้ EAR ตรงๆ; ปกติ: EAR / EAR ฐาน เฉลี่ยของตาที่มีค่า
     def _openness(f: FrameFeatures, cal: Calibration) -> float | None:
         if cal.fallback:
             return _mean([e for e in (f.ear_left, f.ear_right) if e is not None])
         pairs = ((f.ear_left, cal.ear_open_left), (f.ear_right, cal.ear_open_right))
         return _mean([ear / open_ for ear, open_ in pairs if ear is not None and open_])
 
+    # นับเวลาที่ไม่เห็นหน้า: ต้องหายต่อเนื่อง max_gap_s ถึงเริ่มนับ
+    # และต้องเห็นต่อเนื่อง max_gap_s ถึงหยุดนับ (กันการตรวจจับพลาดเฟรมเดียว)
     def _update_no_face(self, f: FrameFeatures) -> float:
         """No-face run length, with symmetric hysteresis of max_gap_s.
 
@@ -222,6 +242,7 @@ class RuleEngine:
             return self._face_since - self._no_face_start  # confirming a returning face
         return t - self._no_face_start
 
+    # ใส่ช่วงเวลาระหว่างเฟรมลงหน้าต่างเวลา ไม่เกิน max_gap_s (ช่องว่างยาวถือว่าไม่รู้ค่า)
     def _attribute(self, window: TimeWindow, t0: float, t1: float, value: bool | None) -> None:
         """Credit [t0, t1) to `value`, at most max_gap_s of it: a longer frame gap is unknown."""
         window.add(t0, min(t1, t0 + self.cfg.signals.max_gap_s), value)

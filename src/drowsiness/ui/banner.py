@@ -14,6 +14,7 @@ import numpy as np
 from drowsiness.alerts import AlertDecision
 from drowsiness.types import AlertLevel
 
+# ฟอนต์, สี (เรียงเป็น BGR ไม่ใช่ RGB), ขนาดขอบ, ความสูงแถบ 12% ของภาพ
 _FONT = cv2.FONT_HERSHEY_DUPLEX
 _SMALL = cv2.FONT_HERSHEY_SIMPLEX
 _RED, _DARK_RED, _AMBER, _GREY, _GREEN = (
@@ -29,20 +30,25 @@ _BANNER_RATIO = 0.12
 _TOAST_Y = 110  # below the status bar and the debug logic panel (top right)
 
 
+# ความสูงแถบล่าง (อย่างน้อย 28 px); overlay ใช้ค่านี้เว้นที่
 def banner_height(image: np.ndarray) -> int:
     """Height of the bottom banner; debug panels stay above it."""
     return max(28, round(image.shape[0] * _BANNER_RATIO))
 
 
+# หาขนาดตัวอักษรที่พอดีกรอบ (0.3-1.4) ข้อความจึงไม่ล้นจอ
 def _fit_scale(text: str, font: int, max_w: int, max_h: int, thickness: int) -> float:
     (w, h), _ = cv2.getTextSize(text, font, 1.0, thickness)
     return max(0.3, min(max_w / max(w, 1), max_h / max(h, 1), 1.4))
 
 
+# กระพริบ: ติดครึ่งแรกของทุกรอบ ใช้เวลาของเฟรม replay จึงกระพริบเหมือนเดิม
 def _flash_on(now: float, hz: float) -> bool:
     return math.floor(now * hz * 2) % 2 == 0  # on for the first half of each period
 
 
+# วาดสิ่งที่คนขับเห็น: แถบล่าง, กรอบรอบภาพ, toast, ป้าย SOUND OFF
+# วาดอย่างเดียว ทำตาม AlertDecision ไม่ตัดสินอะไรเอง
 def draw_banner(
     image: np.ndarray,
     decision: AlertDecision,
@@ -53,10 +59,12 @@ def draw_banner(
     """Bottom banner (+ frame border for warnings/alarms), INFO toast, SOUND OFF tag."""
     height, width = image.shape[:2]
     level = decision.level
+    # ไม่มีการเตือน -> "Monitoring" สีเขียวเล็กๆ มุมขวาล่าง
     if decision.message is None:
         cv2.putText(image, "Monitoring", (width - 110, height - 10), _SMALL, 0.5, _GREEN, 1,
                     cv2.LINE_AA)  # fmt: skip
     else:
+        # เลือกสี: ALARM แดงกระพริบ, WARNING เหลืองอำพัน, อื่นๆ (calibrating) เทา
         if level == AlertLevel.ALARM:
             on = not decision.flash or _flash_on(now, flash_hz)
             fill, text_color = (_RED, _WHITE) if on else (_DARK_RED, _WHITE)
@@ -64,8 +72,10 @@ def draw_banner(
             fill, text_color = _AMBER, _BLACK
         else:
             fill, text_color = _GREY, _BLACK
+        # เตือน/ภัย: วาดกรอบรอบภาพทั้งภาพ (เห็นได้ด้วยหางตา)
         if level in (AlertLevel.WARNING, AlertLevel.ALARM):
             cv2.rectangle(image, (0, 0), (width - 1, height - 1), fill, _BORDER_PX * 2)
+        # แถบสีทึบด้านล่าง แล้ววาดข้อความกึ่งกลาง
         bar = banner_height(image)
         cv2.rectangle(image, (0, height - bar), (width, height), fill, thickness=-1)
         thick = 2 if level == AlertLevel.ALARM else 1
@@ -73,11 +83,13 @@ def draw_banner(
         (w, h), _ = cv2.getTextSize(decision.message, _FONT, scale, thick)
         org = ((width - w) // 2, height - (bar - h) // 2)
         cv2.putText(image, decision.message, org, _FONT, scale, text_color, thick, cv2.LINE_AA)
+    # เสียงใช้ไม่ได้ -> ป้าย SOUND OFF ให้คนขับรู้ว่ามีแต่การเตือนทางภาพ
     if sound_off:  # the driver must know that alerts are visual only
         bar = banner_height(image) if decision.message is not None else 28
         y = height - bar - 10
         cv2.rectangle(image, (width - 120, y - 20), (width - 12, y + 6), _BLACK, thickness=-1)
         cv2.putText(image, "SOUND OFF", (width - 112, y), _SMALL, 0.55, _AMBER, 1, cv2.LINE_AA)
+    # toast = ข้อความ INFO สั้นๆ (เช่น Calibrated) กล่องเทาด้านบน
     if decision.toast:
         (w, h), _ = cv2.getTextSize(decision.toast, _SMALL, 0.6, 1)
         x, y = max((width - w) // 2, 0), _TOAST_Y

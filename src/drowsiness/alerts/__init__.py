@@ -15,11 +15,13 @@ __all__ = [
 ]  # fmt: skip
 
 
+# สร้างระบบแจ้งเตือนตาม config: log เปิดเสมอ, เสียงถ้าไม่ mute, webhook ถ้ามี URL
 def build_alerts(cfg: Config) -> AlertManager:
     """AlertManager with the configured sinks; use as a context manager (stops sound)."""
     a = cfg.alerts
     sinks: list[AlertSink] = [LogSink()]
     if a.sound:
+        # import ตรงนี้ (lazy): ถ้า mute จะไม่โหลดไลบรารีเสียงเลย
         from drowsiness.alerts.sound import SoundSink
 
         sinks.append(SoundSink(a))

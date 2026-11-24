@@ -18,16 +18,20 @@ from typing import Any
 
 import yaml
 
+# ไฟล์ค่าเริ่มต้นอยู่ข้างไฟล์นี้ (ค่า threshold ทุกตัวอยู่ที่นั่น ไม่ฝังในโค้ด)
 DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent / "default_config.yaml"
 
 CAMERA_BACKENDS = ("auto", "msmf", "dshow", "any")
 
 
+# config ผิด (key ผิด, ขาด, type ผิด, ค่าไม่สมเหตุสมผล)
 class ConfigError(ValueError):
     """The configuration is invalid."""
 
 
 @dataclass(frozen=True, slots=True)
+# ---- dataclass หนึ่งตัวต่อหนึ่งหมวดของ YAML ----
+# type hint ของแต่ละ field คือกฎที่ใช้ตรวจค่า
 class CaptureConfig:
     source: int | str
     backend: str
@@ -158,6 +162,7 @@ class AlertsConfig:
 
 
 @dataclass(frozen=True, slots=True)
+# config ทั้งหมด รวมทุกหมวด
 class Config:
     capture: CaptureConfig
     runtime: RuntimeConfig
@@ -176,6 +181,7 @@ class Config:
     alerts: AlertsConfig
 
 
+# โหลด config: ค่าเริ่มต้น -> ทับด้วยไฟล์ผู้ใช้ -> ทับด้วย flag -> ตรวจ
 def load_config(
     path: str | Path | None = None,
     overrides: Mapping[str, Any] | None = None,
@@ -191,6 +197,7 @@ def load_config(
     return config
 
 
+# อ่าน YAML แบบปลอดภัย (safe_load ไม่รันโค้ดในไฟล์) ผิดพลาด -> ConfigError
 def _read_yaml(path: Path) -> dict[str, Any]:
     try:
         with path.open(encoding="utf-8") as f:
@@ -204,6 +211,7 @@ def _read_yaml(path: Path) -> dict[str, Any]:
     return data
 
 
+# รวม dict ซ้อนชั้น: ผู้ใช้เขียนแค่ key ที่อยากเปลี่ยน ที่เหลือใช้ค่าเริ่มต้น
 def _deep_merge(base: Mapping[str, Any], update: Mapping[str, Any]) -> dict[str, Any]:
     merged = dict(base)
     for key, value in update.items():
@@ -214,6 +222,7 @@ def _deep_merge(base: Mapping[str, Any], update: Mapping[str, Any]) -> dict[str,
     return merged
 
 
+# สร้าง dataclass จาก dict: key ไม่รู้จัก (พิมพ์ผิด) หรือ key ขาด -> error ทันที
 def _build(cls: type, data: Any, where: str) -> Any:
     if not isinstance(data, Mapping):
         raise ConfigError(f"{where}: expected a mapping, got {type(data).__name__}")
@@ -229,6 +238,8 @@ def _build(cls: type, data: Any, where: str) -> Any:
     return cls(**values)
 
 
+# ตรวจ type ตาม hint: bool ต้องเป็น bool, int ต้องไม่ใช่ bool (True เป็น int ใน Python)
+# float รับ int ได้แต่ต้องเป็นตัวเลขจำกัด (ไม่ใช่ inf/nan)
 def _convert(value: Any, hint: Any, where: str) -> Any:
     if dataclasses.is_dataclass(hint):
         return _build(hint, value, where)
@@ -253,6 +264,8 @@ def _convert(value: Any, hint: Any, where: str) -> Any:
 LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
 
 
+# ตรวจความสมเหตุสมผล: ตัวเลขต้อง > 0, สัดส่วน <= 1, warning < alarm,
+# flash_hz <= 3 (กันแสงกระพริบเร็วเกิน), webhook ต้องเป็น http(s)
 def _check_semantics(config: Config) -> None:
     # Every number is a size, rate, duration, angle, ratio or count: all must be > 0.
     # (capture.source is an index, so 0 is valid there.)

@@ -17,6 +17,7 @@ from typing import Self
 from drowsiness.types import FrameFeatures, PerceptionOutput
 
 # MediaPipe Face Landmarker blendshape categories, in model output order.
+# ชื่อ blendshape 52 ตัวตามลำดับของโมเดล (คอลัมน์ CSV คงที่)
 BLENDSHAPE_NAMES = (
     "_neutral", "browDownLeft", "browDownRight", "browInnerUp", "browOuterUpLeft",
     "browOuterUpRight", "cheekPuff", "cheekSquintLeft", "cheekSquintRight", "eyeBlinkLeft",
@@ -31,22 +32,27 @@ BLENDSHAPE_NAMES = (
     "noseSneerLeft", "noseSneerRight",
 )  # fmt: skip
 
+# คอลัมน์พื้นฐาน 12 ตัวของ CSV v1
 BASE_COLUMNS = (
     "timestamp", "frame_index", "face_found", "ear_left", "ear_right", "mar",
     "pitch", "yaw", "roll", "gaze_h", "gaze_v", "perception_ms",
 )  # fmt: skip
 _FLOAT_FIELDS = ("ear_left", "ear_right", "mar", "pitch", "yaw", "roll")
+# เขียนลงดิสก์ทุก 1 วินาที ไม่ใช่ทุกเฟรม (ไม่บล็อกลูปหลัก)
 FLUSH_INTERVAL_S = 1.0
 
 
+# None -> ช่องว่าง; float ใช้ repr จึงอ่านกลับได้ค่าเดิมทุกหลัก
 def _fmt(value: float | None) -> str:
     return "" if value is None else repr(float(value))
 
 
+# อ่านกลับ: ช่องว่าง -> None
 def _parse(cell: str) -> float | None:
     return None if cell == "" else float(cell)
 
 
+# เขียนค่าของทุกเฟรมลง CSV (--log-features) ใช้ replay logic และประเมินผล
 class FeatureCsvWriter:
     """Buffered writer; flushes about once a second and on close (never per frame)."""
 
@@ -57,6 +63,7 @@ class FeatureCsvWriter:
         self._writer = None
         self._last_flush = 0.0
 
+    # สร้างโฟลเดอร์ เปิดไฟล์ แล้วเขียนแถวหัวตาราง
     def open(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._file = self.path.open("w", encoding="utf-8", newline="")
@@ -65,6 +72,7 @@ class FeatureCsvWriter:
         self._writer.writerow([*BASE_COLUMNS, *bs_columns])
         self._last_flush = time.perf_counter()
 
+    # เขียน 1 แถวต่อเฟรม แล้ว flush ถ้าผ่านไป 1 วินาที
     def write(self, out: PerceptionOutput, frame_index: int) -> None:
         if self._writer is None:
             raise RuntimeError("feature log is not open")
@@ -102,6 +110,7 @@ class FeatureCsvWriter:
         self.close()
 
 
+# อ่าน CSV กลับเป็น FrameFeatures: ป้อน logic ซ้ำได้โดยไม่ต้องรัน MediaPipe ใหม่
 def read_feature_csv(path: str | Path) -> list[FrameFeatures]:
     """Rebuild the FrameFeatures stream from a v1 CSV (frame_index/perception_ms ignored)."""
     features = []

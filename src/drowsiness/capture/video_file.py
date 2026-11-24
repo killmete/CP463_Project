@@ -15,10 +15,12 @@ log = logging.getLogger(__name__)
 
 # Containers sometimes report a time base (e.g. 1000 or 90000) instead of a frame rate,
 # or nothing. Timestamps drive the timing rules, so refuse to guess outside this range.
+# fps ที่ยอมรับได้ 1-240: บางไฟล์รายงานค่าแปลก (1000, 90000) เวลาทั้งระบบจะผิด
 MIN_PLAUSIBLE_FPS = 1.0
 MAX_PLAUSIBLE_FPS = 240.0
 
 
+# เล่นไฟล์วิดีโอ: อ่านทุกเฟรมตามลำดับ ไม่ใช้ thread ไม่ทิ้งเฟรม
 class VideoFileSource(FrameSource):
     """Reads every frame in order (no dropping). timestamp = index / fps.
 
@@ -33,6 +35,7 @@ class VideoFileSource(FrameSource):
         self._cap: cv2.VideoCapture | None = None
         self._index = 0
 
+    # เปิดไฟล์และหา fps: ใช้ fps_override ถ้ามี ไม่งั้นอ่านจากไฟล์แล้วตรวจว่าสมเหตุสมผล
     def open(self) -> None:
         if not self.path.is_file():
             raise FileNotFoundError(f"video file not found: {self.path}")
@@ -54,10 +57,13 @@ class VideoFileSource(FrameSource):
         self._fps = fps
         self._index = 0
 
+    # อ่านเฟรมถัดไป: timestamp = index / fps (เช่นเฟรม 30 ที่ 30 fps = 1.0 วินาที)
+    # ไม่ขึ้นกับความเร็วเครื่อง รันซ้ำได้ผลเท่าเดิมทุกครั้ง (deterministic)
     def read(self) -> FramePacket | None:
         if self._cap is None:
             raise RuntimeError("source is not open")
         ok, image = self._cap.read()
+        # เวลาจริง ใช้วัด latency เท่านั้น ไม่ใช้ในการตัดสิน
         grabbed_at = time.perf_counter()
         if not ok:
             return None
@@ -65,6 +71,7 @@ class VideoFileSource(FrameSource):
         self._index += 1
         return FramePacket(image, index / self._fps, index, grabbed_at)
 
+    # ปล่อยไฟล์ (เรียกซ้ำได้ปลอดภัย)
     def close(self) -> None:
         if self._cap is not None:
             self._cap.release()

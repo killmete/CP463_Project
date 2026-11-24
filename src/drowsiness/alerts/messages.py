@@ -7,8 +7,10 @@ from __future__ import annotations
 
 from drowsiness.types import AlertLevel
 
+# ข้อความสั้นไม่เกิน 32 ตัว อ่านได้ในเสี้ยววินาที; ASCII เพราะฟอนต์ OpenCV ไม่มีภาษาไทย
 MAX_CHARS = 32
 
+# ข้อความของแต่ละเหตุผล: บอกสิ่งที่เห็น + สิ่งที่ควรทำ
 MESSAGES: dict[str, str] = {
     # DROWSY_ALARM
     "sleep": "WAKE UP - pull over safely",
@@ -32,6 +34,7 @@ MESSAGES: dict[str, str] = {
 ESCALATED = "Drowsy again - stop and rest"
 CALIBRATING = "Calibrating - look ahead"
 
+# ข้อความทั่วไปต่อระดับ ใช้เมื่อเจอเหตุผลที่ไม่มีใน MESSAGES
 _GENERIC = {
     AlertLevel.ALARM: "DANGER - pull over safely",
     AlertLevel.WARNING: "Attention - watch the road",
@@ -39,6 +42,7 @@ _GENERIC = {
 }
 
 
+# หาข้อความของเหตุผล ถ้าไม่มีใช้ข้อความทั่วไป (ไม่ crash)
 def message_for(reason: str | None, level: AlertLevel) -> str:
     """Banner text for `reason`; an unknown reason gets a generic text for its level."""
     if reason is not None and reason in MESSAGES:

@@ -10,6 +10,7 @@ import statistics
 from collections import deque
 
 
+# ทำค่าให้เรียบ: median ของค่าในช่วง window_s วินาทีล่าสุด (ตัดสัญญาณกระตุก)
 class MedianSmoother:
     """Median of the values seen in the last `window_s` seconds (None values are skipped)."""
 
@@ -18,12 +19,14 @@ class MedianSmoother:
         self._samples: deque[tuple[float, float]] = deque()
 
     def update(self, t: float, value: float | None) -> float | None:
+        # ลบค่าที่เก่ากว่า window ออก
         while self._samples and self._samples[0][0] < t - self.window_s - 1e-9:
             self._samples.popleft()
         if value is None:
             return None
         self._samples.append((t, value))
         values = [v for _, v in self._samples]
+        # ทำให้จำนวนเป็นเลขคี่ -> median เป็นค่าจริงตัวหนึ่ง และหน่วงขึ้น/ลงเท่ากัน
         if len(values) % 2 == 0:
             values = values[1:]  # odd count: onset and release are delayed equally
         return statistics.median(values)
@@ -32,6 +35,9 @@ class MedianSmoother:
         self._samples.clear()
 
 
+# เงื่อนไขจริง/เท็จตามเวลา พร้อมนับว่าจริงต่อเนื่องมากี่วินาที
+# ข้อมูลหายสั้นๆ (<= max_gap_s): ใช้ค่าเดิมต่อ
+# หายนานและเป็นเงื่อนไขอันตรายที่เป็นจริงมานานพอ: ถือว่ายังจริง (carry)
 class Condition:
     """A boolean condition over time with gap tolerance.
 
@@ -63,9 +69,11 @@ class Condition:
         self._since: float | None = None
         self.carrying = False
 
+    # รับค่าเฟรมนี้ (True/False/None=ไม่รู้) คืนค่าที่ใช้จริง
     def update(self, t: float, value: bool | None) -> bool | None:
         """Feed one frame; returns the effective value (True/False/None)."""
         self.carrying = False
+        # รู้ค่า: จำไว้ และจดเวลาที่เริ่มเป็นจริง (_since)
         if value is not None:
             self._last_value, self._last_known_t = value, t
             if value and self._since is None:
@@ -75,9 +83,12 @@ class Condition:
             return value
         if self._last_value is None or self._last_known_t is None:
             return None
+        # ไม่รู้ค่า: ช่องว่างสั้น -> ใช้ค่าเดิม
         gap = t - self._last_known_t
         if gap <= self.max_gap_s:
             return self._last_value  # short gap: hold
+        # ช่องว่างยาว: carry เฉพาะเงื่อนไขอันตรายที่จริงมานาน >= carry_min_s
+        # (กันการกระพริบตาตอนหน้าหายถูกนับเป็นหลับ)
         established = (
             self._since is not None and self._last_known_t - self._since >= self.carry_min_s
         )
@@ -87,10 +98,13 @@ class Condition:
         self._last_value, self._since = None, None
         return None
 
+    # เป็นจริงต่อเนื่องมากี่วินาที (เช่น ตาปิดมานานเท่าไร)
     def duration(self, t: float) -> float:
         return t - self._since if self._since is not None else 0.0
 
 
+# นับวินาทีที่เงื่อนไขจริง เทียบกับวินาทีที่รู้ค่า ในช่วง window_s ล่าสุด
+# ใช้คำนวณ PERCLOS = เวลาตาปิด / เวลาที่รู้ค่า; ช่วงที่ไม่รู้ค่าไม่นับทั้งสองฝั่ง
 class TimeWindow:
     """Seconds a condition was True vs known over the last `window_s` seconds.
 
@@ -102,6 +116,7 @@ class TimeWindow:
         self.window_s = window_s
         self._segments: deque[tuple[float, float, bool]] = deque()
 
+    # เพิ่มช่วงเวลา [t0, t1) พร้อมค่า; ช่วงติดกันที่ค่าเดียวกันรวมเป็นช่วงเดียว
     def add(self, t0: float, t1: float, value: bool | None) -> None:
         if value is None or t1 <= t0:
             return
@@ -110,6 +125,7 @@ class TimeWindow:
         else:
             self._segments.append((t0, t1, value))
 
+    # ตัดช่วงที่หลุด window แล้วรวมเวลาจริงและเวลาที่รู้ค่า
     def totals(self, now: float) -> tuple[float, float]:
         """(true_s, known_s) inside [now - window_s, now]."""
         start = now - self.window_s
@@ -128,6 +144,7 @@ class TimeWindow:
         self._segments.clear()
 
 
+# นับจำนวนเหตุการณ์ (เช่น หาว) ใน window_s วินาทีล่าสุด
 class EventTimes:
     """Times of discrete events (e.g. yawns) within the last `window_s` seconds."""
 

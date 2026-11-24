@@ -14,6 +14,7 @@ import urllib.request
 from collections.abc import Sequence
 from pathlib import Path
 
+# ที่อยู่ไฟล์โมเดลของ Google พร้อมขนาดและ SHA-256 ไว้ตรวจว่าไฟล์ถูกต้อง
 MODEL_URL = (
     "https://storage.googleapis.com/mediapipe-models/face_landmarker/"
     "face_landmarker/float16/1/face_landmarker.task"
@@ -23,6 +24,7 @@ MODEL_SHA256 = "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff
 DEFAULT_DEST = Path("models/face_landmarker.task")
 
 
+# คำนวณ hash ของไฟล์ทีละ 1 MB (ไม่โหลดทั้งไฟล์เข้าหน่วยความจำ)
 def sha256_of(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as f:
@@ -31,6 +33,8 @@ def sha256_of(path: Path) -> str:
     return digest.hexdigest()
 
 
+# ดาวน์โหลดโมเดล: มีไฟล์ที่ถูกต้องแล้วข้าม; โหลดลง .part ก่อน
+# ตรวจขนาดและ hash แล้วค่อยเปลี่ยนชื่อ จึงไม่มีไฟล์ครึ่งๆ ค้าง
 def fetch_model(dest: Path = DEFAULT_DEST, url: str = MODEL_URL) -> Path:
     """Download to `dest` unless a verified copy is already there. Raises on mismatch."""
     if dest.is_file() and sha256_of(dest) == MODEL_SHA256:
@@ -50,6 +54,7 @@ def fetch_model(dest: Path = DEFAULT_DEST, url: str = MODEL_URL) -> Path:
     return dest
 
 
+# คำสั่ง python -m drowsiness.perception.fetch_model (สำเร็จ = 0, พลาด = 1)
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Download the Face Landmarker model.")
     parser.add_argument("--dest", type=Path, default=DEFAULT_DEST)
