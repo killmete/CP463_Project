@@ -1,3 +1,4 @@
+# เทสต์ app.py: ลูปหลัก, CLI, exit code, การปิดทรัพยากร
 import subprocess
 import sys
 from pathlib import Path
@@ -19,6 +20,7 @@ from drowsiness.types import DriverState
 CAPTURE_ONLY = ["--no-display", "--no-perception"]
 
 
+# ลูปหลักประมวลผลเฟรมได้แบบไม่มีจอ
 def test_run_loop_processes_frames_headless(synthetic_clip: Path):
     with VideoFileSource(synthetic_clip) as source:
         stats = run_loop(source, load_config(), display=False, max_frames=10)
@@ -27,26 +29,31 @@ def test_run_loop_processes_frames_headless(synthetic_clip: Path):
     assert 0 <= stats.latency_p50_ms <= stats.latency_p95_ms
 
 
+# ภาพหมด ลูปหยุด
 def test_run_loop_stops_at_end_of_stream(synthetic_clip: Path, clip_spec):
     with VideoFileSource(synthetic_clip) as source:
         stats = run_loop(source, load_config(), display=False)
     assert stats.frames == clip_spec.frames
 
 
+# รัน main แบบง่ายสุดได้ (smoke test)
 def test_main_smoke(synthetic_clip: Path):
     assert main(["--source", str(synthetic_clip), *CAPTURE_ONLY, "--max-frames", "10"]) == 0
 
 
+# ไฟล์วิดีโอไม่มี -> exit code ผิดพลาด
 def test_main_missing_file_fails(tmp_path: Path):
     assert main(["--source", str(tmp_path / "missing.avi"), *CAPTURE_ONLY]) == 1
 
 
+# config ผิด -> exit code ผิดพลาด
 def test_main_bad_config_fails(tmp_path: Path):
     bad = tmp_path / "bad.yaml"
     bad.write_text("capture:\n  colour: red\n", encoding="utf-8")
     assert main(["--config", str(bad), "--no-display"]) == 2
 
 
+# กล้องหลุดระหว่างรัน -> แจ้งผิดพลาด ไม่จบเงียบๆ
 def test_main_fails_when_live_camera_is_lost(monkeypatch):
     class LostCamera(FrameSource):
         def open(self):
@@ -66,6 +73,7 @@ def test_main_fails_when_live_camera_is_lost(monkeypatch):
     assert main(["--source", "0", *CAPTURE_ONLY]) == 1
 
 
+# Ctrl+C หยุดสะอาดและยังมีสถิติ
 def test_ctrl_c_stops_cleanly_with_stats(synthetic_clip: Path):
     class InterruptAfterFive(VideoFileSource):
         def read(self):
@@ -79,6 +87,7 @@ def test_ctrl_c_stops_cleanly_with_stats(synthetic_clip: Path):
     assert stats.frames == 5
 
 
+# FpsMeter วัด FPS ถูก
 def test_fps_meter():
     meter = FpsMeter(window_s=1.0)
     fps = 0.0
@@ -87,6 +96,7 @@ def test_fps_meter():
     assert abs(fps - 30) < 1e-6
 
 
+# --no-perception ไม่ import mediapipe
 def test_capture_only_does_not_import_mediapipe(synthetic_clip: Path):
     # Fresh interpreter: other tests in this process may already have imported mediapipe.
     args = ["--source", str(synthetic_clip), *CAPTURE_ONLY, "--max-frames", "2"]
@@ -101,6 +111,7 @@ def test_capture_only_does_not_import_mediapipe(synthetic_clip: Path):
     assert result.returncode == 0, result.stderr
 
 
+# perception ปลอมที่เจอหน้าทุกเฟรม
 class AlwaysFace:
     def __init__(self, landmarks):
         self.landmarks = landmarks
@@ -112,6 +123,7 @@ class AlwaysFace:
         pass
 
 
+# เขียน CSV 1 แถวต่อเฟรม
 def test_run_loop_logs_one_feature_row_per_frame(synthetic_clip: Path, tmp_path: Path, clip_spec):
     cfg = load_config()
     landmarks = np.random.default_rng(0).uniform(0.3, 0.7, (478, 3)).astype(np.float32)
@@ -129,6 +141,7 @@ def test_run_loop_logs_one_feature_row_per_frame(synthetic_clip: Path, tmp_path:
     assert stats.perception_p95_ms is not None
 
 
+# ไม่มีไฟล์โมเดล -> exit code 2
 def test_missing_model_exits_2(synthetic_clip: Path, tmp_path: Path):
     config = tmp_path / "cfg.yaml"
     missing = (tmp_path / "missing.task").as_posix()
@@ -136,11 +149,13 @@ def test_missing_model_exits_2(synthetic_clip: Path, tmp_path: Path):
     assert main(["--source", str(synthetic_clip), "--no-display", "--config", str(config)]) == 2
 
 
+# --log-features ใช้กับ --no-perception ไม่ได้ -> exit code 2
 def test_log_features_needs_perception(synthetic_clip: Path, tmp_path: Path):
     args = ["--source", str(synthetic_clip), *CAPTURE_ONLY, "--log-features", "x.csv"]
     assert main(args) == 2
 
 
+# มีโมเดล: main เขียน CSV ได้จริง
 @pytest.mark.model
 def test_main_with_model_writes_feature_csv(
     synthetic_clip: Path, tmp_path: Path, model_path: Path, clip_spec, monkeypatch
@@ -154,6 +169,7 @@ def test_main_with_model_writes_feature_csv(
     assert not any(r.face_found for r in rows)  # flat gray frames have no face
 
 
+# แหล่งภาพเปิดไม่ได้ ยังปิด perception
 def test_main_closes_perception_when_source_fails(monkeypatch, tmp_path: Path):
     closed = []
 
@@ -178,6 +194,7 @@ def test_main_closes_perception_when_source_fails(monkeypatch, tmp_path: Path):
     assert not csv_path.exists()  # no stub CSV for a source that never opened
 
 
+# perception ปลอมที่ไม่เจอหน้าเลย
 class NeverFace:
     def detect(self, rgb, timestamp_ms):
         return None
@@ -186,6 +203,7 @@ class NeverFace:
         pass
 
 
+# ลูปหลักเรียก logic และนับ event
 @pytest.mark.parametrize("clip_spec", [ClipSpec(frames=30, fps=10.0)])  # 3 s clip
 def test_run_loop_runs_logic_and_counts_events(synthetic_clip: Path, clip_spec, caplog):
     cfg = load_config()
@@ -205,6 +223,7 @@ def test_run_loop_runs_logic_and_counts_events(synthetic_clip: Path, clip_spec, 
     assert "NO_FACE (no_face)" in caplog.text
 
 
+# main สร้าง alerts เมื่อมี perception และ --mute ปิดเสียงจริง
 def test_main_builds_alerts_with_perception_and_respects_mute(monkeypatch, synthetic_clip):
     cfg_preprocess = load_config().preprocess
     monkeypatch.setattr(
@@ -225,6 +244,7 @@ def test_main_builds_alerts_with_perception_and_respects_mute(monkeypatch, synth
     assert (cfg.overlay.landmarks, cfg.overlay.values, cfg.overlay.logic) == (False,) * 3
 
 
+# --no-perception ไม่มี alerts
 def test_capture_only_has_no_alerts(monkeypatch, synthetic_clip):
     monkeypatch.setattr(app_module, "build_alerts", lambda cfg: pytest.fail("alerts built"))
     assert main(["--source", str(synthetic_clip), *CAPTURE_ONLY, "--max-frames", "3"]) == 0

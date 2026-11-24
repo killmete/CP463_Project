@@ -17,6 +17,7 @@ from drowsiness.types import AlertEvent
 log = logging.getLogger("drowsiness")
 
 
+# เขียน event ลง log: เวลา ระดับ สถานะ เหตุผล และรายละเอียด
 def log_event(event: AlertEvent) -> None:
     details = " ".join(
         f"{k}={v:.2f}" if isinstance(v, float) else f"{k}={v}" for k, v in event.details.items()
@@ -25,6 +26,7 @@ def log_event(event: AlertEvent) -> None:
              event.reason, details)  # fmt: skip
 
 
+# sink ที่ log อย่างเดียว (เปิดเสมอ) ใช้ตรวจย้อนหลังว่าเตือนอะไรเมื่อไร
 class LogSink:
     """Logs logic's events (INFO) and what was sounded or escalated (DEBUG)."""
 
@@ -41,6 +43,8 @@ class LogSink:
         pass
 
 
+# ส่งการเตือนไปที่ URL (เช่นระบบของบริษัทรถ) ปิดไว้เป็นค่าเริ่มต้น
+# ส่งแค่ข้อมูล 5 ค่า ไม่ส่งรูปหน้าคนขับ (ความเป็นส่วนตัว)
 class WebhookSink:
     """POSTs {timestamp, state, reason, level, escalated} JSON for each sounded alert.
 
@@ -49,10 +53,12 @@ class WebhookSink:
 
     def __init__(self, url: str, timeout_s: float, maxsize: int = 16) -> None:
         self.url, self.timeout_s = url, timeout_s
+        # queue ขนาด 16 + thread แยก: การส่งผ่านเน็ตไม่ทำให้ลูปหลักช้า
         self._queue: queue.Queue[dict | None] = queue.Queue(maxsize)
         self._thread = threading.Thread(target=self._run, name="alert-webhook", daemon=True)
         self._thread.start()
 
+    # ส่งเฉพาะเมื่อมีเสียงเตือนจริง; queue เต็มทิ้งอันใหม่ ไม่รอ
     def emit(self, decision: AlertDecision) -> None:
         if not decision.sounded:
             return
@@ -68,6 +74,7 @@ class WebhookSink:
         except queue.Full:
             log.warning("webhook queue full; alert dropped")
 
+    # ใส่ None เป็นสัญญาณให้ thread หยุด แล้วรอสักครู่
     def close(self) -> None:
         try:
             self._queue.put_nowait(None)
@@ -75,10 +82,12 @@ class WebhookSink:
             return  # daemon thread: it ends with the process
         self._thread.join(timeout=self.timeout_s + 0.5)
 
+    # thread: ดึงจาก queue แล้ว POST ทีละอัน จนเจอ None
     def _run(self) -> None:
         while (payload := self._queue.get()) is not None:
             self.post(payload)
 
+    # POST JSON; error เครือข่ายแค่ log ไม่ส่งต่อถึงลูปหลัก
     def post(self, payload: dict) -> None:
         request = urllib.request.Request(
             self.url,

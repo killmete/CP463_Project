@@ -1,3 +1,4 @@
+# เทสต์ perception ด้วย detector ปลอม (ไม่ต้องมี MediaPipe หรือโมเดล)
 """Perception pipeline with a fake detector (no MediaPipe, no model file)."""
 
 import sys
@@ -19,6 +20,7 @@ from drowsiness.perception.landmarks import NUM_LANDMARKS, RIGHT_EYE
 from drowsiness.types import FrameFeatures, FramePacket
 
 
+# detector ปลอม: คืน landmark ที่กำหนดไว้
 class FakeDetector:
     def __init__(self, results):
         self._results = iter(results)
@@ -51,6 +53,7 @@ def normalised_face():
     return lm
 
 
+# ไม่เจอหน้า -> ค่าทุกตัวเป็น None
 def test_no_face_gives_all_none():
     with Perception(FakeDetector([None]), preprocess()) as perception:
         out = perception.process(packet(t=1.25))
@@ -59,6 +62,7 @@ def test_no_face_gives_all_none():
     assert out.perception_ms >= 0
 
 
+# เจอหน้า -> มีค่าครบทุกตัว และส่ง blendshapes ต่อ
 def test_face_fills_every_m2_feature_and_passes_blendshapes():
     blendshapes = {"eyeBlinkLeft": 0.1, "jawOpen": 0.7}
     detector = FakeDetector([LandmarkResult(normalised_face(), blendshapes)])
@@ -71,6 +75,7 @@ def test_face_fills_every_m2_feature_and_passes_blendshapes():
     assert f.blendshapes == blendshapes
 
 
+# แปลง landmark เป็น pixel ถูกแม้ภาพไม่เป็นสี่เหลี่ยมจัตุรัส
 def test_landmarks_are_converted_to_pixels_on_non_square_frames():
     lm = np.zeros((NUM_LANDMARKS, 3), np.float32)
     p1, p2, p3, p4, p5, p6 = RIGHT_EYE
@@ -86,6 +91,7 @@ def test_landmarks_are_converted_to_pixels_on_non_square_frames():
     assert out.landmarks[p4, 1] == pytest.approx(50.0)
 
 
+# เวลาที่ส่งให้ detector เพิ่มขึ้นเสมอ (MediaPipe บังคับ)
 def test_detector_timestamps_strictly_increase():
     times = [0.0, 0.0, 0.0331, 0.0334, 0.0334, 1.0, 0.5]  # repeats, sub-ms, backwards
     detector = FakeDetector([None] * len(times))
@@ -98,6 +104,7 @@ def test_detector_timestamps_strictly_increase():
     assert [o.features.timestamp for o in outs] == times
 
 
+# detector ได้ภาพ RGB (OpenCV ใช้ BGR)
 def test_detector_receives_rgb():
     image_packet = packet()
     image_packet.image[0, 0] = (255, 0, 0)  # BGR blue
@@ -107,6 +114,7 @@ def test_detector_receives_rgb():
     assert tuple(rgb[0, 0]) == (0, 0, 255)
 
 
+# CLAHE (ปรับแสง) ไม่แก้ภาพที่แสดง
 def test_clahe_never_modifies_the_displayed_frame():
     frame = packet()
     original = frame.image.copy()
@@ -117,6 +125,7 @@ def test_clahe_never_modifies_the_displayed_frame():
     assert not np.array_equal(rgb, original[:, :, ::-1])  # the detector saw the enhanced copy
 
 
+# close ปิด detector
 def test_close_closes_detector():
     detector = FakeDetector([])
     with Perception(detector, preprocess()):
@@ -124,12 +133,14 @@ def test_close_closes_detector():
     assert detector.closed
 
 
+# ไม่มีโมเดล -> error บอกคำสั่งดาวน์โหลด
 def test_missing_model_raises_with_fetch_hint(tmp_path):
     cfg = load_config(overrides={"perception": {"model_path": str(tmp_path / "none.task")}})
     with pytest.raises(ModelNotFoundError, match="fetch_model"):
         build_perception(cfg)
 
 
+# ไม่มี mediapipe -> error บอกวิธีติดตั้ง
 def test_missing_mediapipe_gives_install_hint(tmp_path, monkeypatch):
     model = tmp_path / "m.task"
     model.write_bytes(b"x")
@@ -139,6 +150,7 @@ def test_missing_mediapipe_gives_install_hint(tmp_path, monkeypatch):
         build_perception(cfg)
 
 
+# head pose คำนวณไม่ได้ ยังมีค่าตาและปาก
 def test_pose_failure_keeps_eye_and_mouth_features(monkeypatch):
     def broken_solvepnp(*args, **kwargs):
         raise cv2.error("degenerate")

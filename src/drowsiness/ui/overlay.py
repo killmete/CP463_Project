@@ -19,6 +19,7 @@ from drowsiness.perception.landmarks import (
 from drowsiness.types import DriverState, LogicOutput, PerceptionOutput
 from drowsiness.ui.banner import banner_height
 
+# สีต่างๆ (BGR) และสีของแต่ละสถานะ สำหรับหน้าจอ debug
 _FONT = cv2.FONT_HERSHEY_SIMPLEX
 _GREEN, _RED, _YELLOW, _CYAN, _WHITE, _BLACK = (
     (0, 200, 0),
@@ -40,6 +41,7 @@ _STATE_COLORS = {
 }
 
 
+# แถบบนซ้าย: FPS และ latency เป็นสีแดงถ้าเกินงบเวลา
 def draw_status(image: np.ndarray, fps: float, latency_ms: float, budget_ms: float) -> None:
     """Top bar: FPS and end-to-end latency, red when over the budget."""
     color = _RED if latency_ms > budget_ms else _GREEN
@@ -48,14 +50,17 @@ def draw_status(image: np.ndarray, fps: float, latency_ms: float, budget_ms: flo
     cv2.putText(image, text, (8, 20), _FONT, 0.55, color, 1, cv2.LINE_AA)
 
 
+# ไม่มีค่า -> แสดง "--"
 def _fmt(value: float | None, spec: str) -> str:
     return "  --" if value is None else format(value, spec)
 
 
+# วาดเส้นรอบตา/ปาก, เส้นทิศหน้า, และค่า EAR/MAR/มุมหัว (หรือ NO FACE)
 def draw_perception(image: np.ndarray, out: PerceptionOutput, cfg: OverlayConfig) -> None:
     """Eye/mouth contours, head direction and EAR/MAR/pose readouts; NO FACE if missing."""
     f = out.features
     if cfg.landmarks and out.landmarks is not None:
+        # วาดเส้นรอบตาซ้าย/ขวา (ฟ้า) และปาก (เหลือง)
         pts = out.landmarks[:, :2]
         for contour, color in (
             (LEFT_EYE_CONTOUR, _CYAN),
@@ -64,6 +69,7 @@ def draw_perception(image: np.ndarray, out: PerceptionOutput, cfg: OverlayConfig
         ):
             poly = np.round(pts[list(contour)]).astype(np.int32)
             cv2.polylines(image, [poly], isClosed=True, color=color, thickness=1)
+        # เส้นจากปลายจมูกชี้ทิศที่หน้าหัน (dy ติดลบเพราะแกน y ของภาพชี้ลง)
         if f.pitch is not None and f.yaw is not None:
             # Nose direction: a short line in the direction the head points.
             nose = pts[POSE_POINTS[0]]
@@ -75,6 +81,7 @@ def draw_perception(image: np.ndarray, out: PerceptionOutput, cfg: OverlayConfig
 
     if not cfg.values:
         return
+    # เว้นที่ให้ banner แล้วเขียนค่าตัวเลขมุมซ้ายล่าง
     height = image.shape[0] - banner_height(image)  # keep clear of the alert banner
     if not f.face_found:
         cv2.putText(image, "NO FACE", (8, height - 12), _FONT, 0.9, _RED, 2, cv2.LINE_AA)
@@ -91,6 +98,7 @@ def draw_perception(image: np.ndarray, out: PerceptionOutput, cfg: OverlayConfig
         cv2.putText(image, text, (8, top + 16 + 22 * i), _FONT, 0.55, _WHITE, 1, cv2.LINE_AA)
 
 
+# แผงมุมขวาบน: สถานะ, เหตุผลที่เกิดขึ้น, เวลาตาปิด, เวลามองนอกถนน, PERCLOS, จำนวนหาว
 def draw_logic(image: np.ndarray, out: LogicOutput) -> None:
     """Debug readout of the logic layer, top right: state, active reasons, key timers.
 

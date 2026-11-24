@@ -28,14 +28,17 @@ from eval.catalog import DATASETS, Clip, catalog
 log = logging.getLogger("eval.extract")
 
 
+# ตั้งค่า log ของแต่ละ process ลูก
 def _init_worker() -> None:
     logging.basicConfig(level=logging.WARNING)
 
 
+# path ของ CSV ผลลัพธ์: <ชุดข้อมูล>/<clip_id>.csv
 def feature_path(out_dir: Path, clip: Clip) -> Path:
     return out_dir / clip.dataset / f"{clip.clip_id}.csv"
 
 
+# จำนวนเฟรมจาก header ของไฟล์ ใช้ตรวจว่าถอดรหัสวิดีโอได้ครบไหม
 def video_frame_count(video: Path) -> int:
     """Frame count from the container header (0 if unknown); used to spot cut-short decodes."""
     import cv2
@@ -47,6 +50,7 @@ def video_frame_count(video: Path) -> int:
         cap.release()
 
 
+# รัน perception กับ 1 คลิปแล้วเขียน CSV; ไม่ raise error คืนผลใน manifest แทน
 def extract_clip(job: tuple[Clip, Path]) -> dict:
     """Run one clip; returns its manifest entry (never raises, errors are reported)."""
     from drowsiness.capture import VideoFileSource
@@ -64,6 +68,7 @@ def extract_clip(job: tuple[Clip, Path]) -> dict:
     try:
         # A fresh detector per clip: MediaPipe's VIDEO mode needs increasing timestamps
         # and tracks the face from frame to frame, so clips must not share one.
+        # เปิด perception, วิดีโอ, และ CSV ชั่วคราว (.partial) พร้อมกัน
         with (
             build_perception(load_config()) as perception,
             VideoFileSource(clip.video) as source,
@@ -76,8 +81,10 @@ def extract_clip(job: tuple[Clip, Path]) -> dict:
                 writer.write(out, packet.index)
                 frames += 1
                 faces += out.features.face_found
+        # เขียนเสร็จแล้วค่อยเปลี่ยนชื่อ: ไฟล์ที่ไม่ครบจะไม่ถูกนับว่าเสร็จ
         os.replace(partial, target)
         entry.update(ok=True, frames=frames, face_ratio=faces / frames if frames else 0.0)
+    # วิดีโอเสียไม่ทำให้ทั้งการรันหยุด: ลบไฟล์ชั่วคราวแล้วบันทึก error
     except Exception as exc:  # a bad video must not stop the whole run
         partial.unlink(missing_ok=True)
         entry.update(ok=False, error=f"{type(exc).__name__}: {exc}", frames=frames)
@@ -85,6 +92,7 @@ def extract_clip(job: tuple[Clip, Path]) -> dict:
     return entry
 
 
+# python -m eval.extract: หาคลิป -> ข้ามคลิปที่ทำแล้ว -> แบ่งงานหลาย process
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--data", type=Path, default=Path("data"))
@@ -96,6 +104,7 @@ def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
 
     clips = catalog(args.data, tuple(args.datasets))
+    # --limit: เอาแค่ N คลิปต่อชุดข้อมูล (ทดลองรันเร็วๆ)
     if args.limit:
         per: dict[str, int] = {}
         clips = [
@@ -103,6 +112,7 @@ def main(argv: list[str] | None = None) -> int:
             for c in clips
             if (per := per | {c.dataset: per.get(c.dataset, 0) + 1})[c.dataset] <= args.limit
         ]
+    # ข้ามคลิปที่มี CSV แล้ว จึงรันต่อจากที่หยุดได้ (resumable)
     todo = [c for c in clips if not feature_path(args.out, c).is_file()]
     log.info(
         "%d clips, %d already done, %d to extract with %d workers",
@@ -127,6 +137,7 @@ def main(argv: list[str] | None = None) -> int:
         open(args.out / "manifest.jsonl", "a", encoding="utf-8") as manifest,
     ):
         jobs = [(c, args.out) for c in todo]
+        # รับผลทีละคลิปเมื่อเสร็จ เขียน manifest และแสดงเวลาที่เหลือ (eta)
         for i, entry in enumerate(pool.imap_unordered(extract_clip, jobs), 1):
             manifest.write(json.dumps(entry) + "\n")
             manifest.flush()

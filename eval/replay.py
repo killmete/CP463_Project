@@ -18,6 +18,7 @@ from drowsiness.config import Config
 from drowsiness.logic import REASONS, DriverMonitor
 from drowsiness.types import AlertLevel, DriverState, FrameFeatures
 
+# คอลัมน์จาก CSV ที่ต้องใช้ replay
 COLUMNS = (
     "timestamp",
     "frame_index",
@@ -30,11 +31,14 @@ COLUMNS = (
     "roll",
 )
 EXTRA = ("bs_eyeBlinkLeft", "bs_eyeBlinkRight", "bs_jawOpen")  # kept for later analysis
+# รหัสตัวเลขของแต่ละสถานะ และเหตุผลที่นับเป็นการง่วง
 STATES = tuple(DriverState)
 _STATE_CODE = {s: i for i, s in enumerate(STATES)}
 DROWSY_REASONS = ("sleep", "perclos_alarm", "microsleep", "perclos_warning", "head_nod", "yawning")
 
 
+# อ่าน CSV เป็น array (ค่าว่าง = NaN) แล้ว cache เป็น .npz ให้ครั้งต่อไปเร็วขึ้น
+# ตรวจว่าแถว i = เฟรม i ไม่งั้น label จะไม่ตรงเฟรม
 def load_features(csv_path: Path) -> dict[str, np.ndarray]:
     """Columns as float arrays (NaN = missing); cached in <clip>.npz.
 
@@ -64,6 +68,7 @@ def load_features(csv_path: Path) -> dict[str, np.ndarray]:
     return arrays
 
 
+# แปลง array กลับเป็น FrameFeatures ทีละเฟรม (NaN -> None)
 def to_frames(arrays: dict[str, np.ndarray]) -> list[FrameFeatures]:
     def opt(name: str, i: int) -> float | None:
         v = arrays[name][i]
@@ -91,6 +96,7 @@ def to_frames(arrays: dict[str, np.ndarray]) -> list[FrameFeatures]:
 
 
 @dataclass
+# สิ่งที่ logic ตัดสินในแต่ละเฟรม: สถานะ, เงื่อนไขต่างๆ, PERCLOS, เหตุผล, การเตือน
 class Trace:
     """What logic decided, frame by frame (index i = frame i of the clip)."""
 
@@ -114,6 +120,7 @@ class Trace:
         return (self.reasons & (1 << REASONS.index(name))) != 0
 
 
+# ป้อน features ผ่าน DriverMonitor ตัวจริง (โค้ดเดียวกับในแอป) แล้วเก็บผลทุกเฟรม
 def replay(frames: list[FrameFeatures], cfg: Config) -> Trace:
     n = len(frames)
     monitor = DriverMonitor(cfg)
@@ -134,6 +141,7 @@ def replay(frames: list[FrameFeatures], cfg: Config) -> Trace:
     )
     durations = {name: np.zeros(n) for name in ("closed_s", "off_road_s", "nod_s")}
     yawns = 0
+    # ทีละเฟรม: เก็บสถานะ, ตัวจับเวลา, เหตุผล (เป็น bitmask), PERCLOS, เวลาที่หาว, การเตือน
     for i, f in enumerate(frames):
         out = monitor.update(f)
         m = out.metrics
@@ -158,6 +166,7 @@ def replay(frames: list[FrameFeatures], cfg: Config) -> Trace:
     return trace
 
 
+# หาเฟรมที่เงื่อนไขเป็นจริงจากตัวจับเวลา และย้อนไปติดเฟรมแรกของแต่ละช่วงด้วย
 def _condition_flags(flag: np.ndarray, duration: np.ndarray, t: np.ndarray) -> None:
     """Frames where a condition holds, from its live timer (0 on the frame it starts).
 

@@ -1,3 +1,4 @@
+# เทสต์ replay: CSV ปลอม -> DriverMonitor -> ลำดับ event ต้องตรงกับคำตอบที่บันทึกไว้ (golden)
 """Replay: synthetic feature CSV (format v1) -> DriverMonitor -> golden event sequence."""
 
 import pytest
@@ -35,6 +36,7 @@ def replay_csv(frames, path):
     return read_feature_csv(path)
 
 
+# event ที่ได้ตรงกับลำดับที่คาดไว้ทุกตัว
 @pytest.mark.parametrize(
     "seq_args",
     [{"fps": 30}, {"fps": 20}, {"fps": 25, "jitter": 0.3}, {"fps": 30, "drop": 0.1, "seed": 3}],
@@ -48,6 +50,7 @@ def test_replay_matches_golden_events(tmp_path, seq_args):
         assert t == pytest.approx(expected, abs=0.2)
 
 
+# รันซ้ำได้ผลเดิมทุกครั้ง
 def test_replay_is_deterministic(tmp_path):
     frames = replay_csv(scenario(fps=30, drop=0.1, seed=7), tmp_path / "f.csv")
     assert run(frames) == run(frames)

@@ -1,3 +1,4 @@
+# เทสต์ VideoFileSource (อ่านวิดีโอไฟล์)
 from pathlib import Path
 
 import cv2
@@ -16,6 +17,7 @@ def _read_all(path: Path) -> list:
     return packets
 
 
+# อ่านครบทุกเฟรม เวลา = index / fps (replay ได้ผลเดิม)
 def test_reads_every_frame_with_deterministic_timestamps(synthetic_clip: Path, clip_spec):
     packets = _read_all(synthetic_clip)
     assert [p.index for p in packets] == list(range(clip_spec.frames))
@@ -24,12 +26,14 @@ def test_reads_every_frame_with_deterministic_timestamps(synthetic_clip: Path, c
         assert p.image.shape == (clip_spec.height, clip_spec.width, 3)
 
 
+# อ่านซ้ำได้ผลเดิม
 def test_replay_is_repeatable(synthetic_clip: Path):
     first = [p.timestamp for p in _read_all(synthetic_clip)]
     second = [p.timestamp for p in _read_all(synthetic_clip)]
     assert first == second
 
 
+# เฟรมมาตามลำดับ
 def test_frames_arrive_in_order(synthetic_clip: Path):
     # Frame i was written with gray level 8*i; MJPG is lossy, so allow some error.
     levels = [float(p.image.mean()) for p in _read_all(synthetic_clip)]
@@ -37,6 +41,7 @@ def test_frames_arrive_in_order(synthetic_clip: Path):
         assert level == pytest.approx(8 * i, abs=3)
 
 
+# หลังจบคืน None
 def test_returns_none_after_end(synthetic_clip: Path):
     with VideoFileSource(synthetic_clip) as source:
         while source.read() is not None:
@@ -44,6 +49,7 @@ def test_returns_none_after_end(synthetic_clip: Path):
         assert source.read() is None
 
 
+# กำหนด fps เองได้
 def test_fps_override(synthetic_clip: Path):
     with VideoFileSource(synthetic_clip, fps_override=10.0) as source:
         source.read()
@@ -51,6 +57,7 @@ def test_fps_override(synthetic_clip: Path):
     assert packet.timestamp == pytest.approx(0.1)
 
 
+# fps ในไฟล์ผิดปกติ -> error
 @pytest.mark.parametrize("bad_fps", [1000.0, 0.5])
 def test_implausible_reported_fps_raises(tmp_path: Path, bad_fps: float):
     path = tmp_path / "bad_fps.avi"
@@ -65,6 +72,7 @@ def test_implausible_reported_fps_raises(tmp_path: Path, bad_fps: float):
         assert source.read().timestamp == pytest.approx(1 / 25)
 
 
+# open_source ส่ง fps ที่กำหนดต่อ
 def test_open_source_passes_fps_override(synthetic_clip: Path):
     cfg = load_config(overrides={"capture": {"source": str(synthetic_clip), "fps_override": 10}})
     with open_source(cfg.capture) as source:
@@ -72,11 +80,13 @@ def test_open_source_passes_fps_override(synthetic_clip: Path):
         assert source.read().timestamp == pytest.approx(0.1)
 
 
+# ไฟล์ไม่มี -> error
 def test_missing_file_raises(tmp_path: Path):
     with pytest.raises(FileNotFoundError):
         VideoFileSource(tmp_path / "missing.mp4").open()
 
 
+# open_source เลือกกล้อง (ตัวเลข) หรือไฟล์ (path) ถูก
 def test_open_source_picks_type(synthetic_clip: Path):
     assert isinstance(
         open_source(load_config(overrides={"capture": {"source": str(synthetic_clip)}}).capture),

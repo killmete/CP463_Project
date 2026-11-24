@@ -10,6 +10,8 @@ import numpy as np
 
 
 @dataclass(frozen=True, slots=True)
+# ผลของหน้า 1 หน้า: จุด 478 จุด (x, y อยู่ใน [0, 1] ของภาพ, z = ความลึกสัมพัทธ์)
+# และ blendshapes = dict ชื่อท่าทางหน้า -> คะแนน 0..1
 class LandmarkResult:
     """One face: landmarks normalised to [0, 1] of the image (x, y) plus relative depth."""
 
@@ -18,6 +20,8 @@ class LandmarkResult:
     blendshapes: Mapping[str, float] | None = None
 
 
+# สัญญาของตัวตรวจจับหน้า: คลาสไหนมี detect() และ close() ก็ใช้แทนได้
+# เทสต์จึงใช้ตัวปลอมได้โดยไม่ต้องโหลด MediaPipe
 class LandmarkDetector(Protocol):
     def detect(self, rgb: np.ndarray, timestamp_ms: int) -> LandmarkResult | None:
         """Landmarks of the driver's face in an RGB uint8 image, or None if no face.

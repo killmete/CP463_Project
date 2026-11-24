@@ -1,3 +1,4 @@
+# เทสต์จากการรีวิว M4: ไม่มีช่วงเงียบผิดๆ, การยกระดับ, เสียงกลับมาได้
 """Regression tests for the milestone 4 review: no silent gaps, escalation, sound recovery."""
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ from drowsiness.types import AlertEvent, AlertLevel, LogicOutput
 from drowsiness.ui import draw_banner
 
 
+# เหตุผลที่รุนแรงกว่าในสถานะเดิม ถูกแจ้งใหม่
 def test_more_serious_reason_within_a_state_is_announced():
     d = Driver().hold(1, S.NORMAL).hold(3, S.DROWSY_WARNING, "yawning")
     mark = len(d.decisions)
@@ -26,6 +28,7 @@ def test_more_serious_reason_within_a_state_is_announced():
     assert d.decisions[-1].message == MESSAGES["microsleep"]
 
 
+# microsleep ซ้ำระหว่างสถานะหาวนาน ยกระดับได้
 def test_repeated_microsleeps_inside_a_long_yawning_state_escalate():
     d = Driver().hold(1, S.NORMAL).hold(2, S.DROWSY_WARNING, "yawning")
     for _ in range(2):  # yawning for longer than alerts.rearm_s between them
@@ -35,6 +38,7 @@ def test_repeated_microsleeps_inside_a_long_yawning_state_escalate():
     assert d.decisions[mark].escalated and d.sounds(mark)[0][1] == SoundCue.ALARM
 
 
+# เหตุผลที่กระพริบทุกเฟรม แจ้งครั้งเดียว
 def test_a_reason_flickering_every_frame_is_announced_once():
     # PERCLOS hovering at its threshold: the reason flips every frame (30 fps, 20 s).
     d = Driver(fps=30).hold(1, S.NORMAL).hold(2, S.DROWSY_WARNING, "yawning")
@@ -47,6 +51,7 @@ def test_a_reason_flickering_every_frame_is_announced_once():
     assert [s for _, s in d.sounds(mark)].count(SoundCue.WARNING) <= 3  # 1 + 10 s repeats
 
 
+# เหตุผลที่หายไปแป๊บเดียว ไม่แจ้งซ้ำ
 def test_a_reason_that_eased_briefly_is_not_re_announced():
     d = Driver().hold(1, S.NORMAL).hold(2, S.DROWSY_WARNING, "yawning")
     d.hold(1.6, S.DROWSY_WARNING, "microsleep").hold(2, S.DROWSY_WARNING, "yawning")
@@ -55,6 +60,7 @@ def test_a_reason_that_eased_briefly_is_not_re_announced():
     assert d.sounds(mark) == []
 
 
+# เตือนที่ถูก cooldown กันเสียง ยังนับเพื่อยกระดับ
 def test_warnings_held_back_by_the_cooldown_still_count_for_escalation():
     d = Driver().hold(1, S.NORMAL)
     for _ in range(2):
@@ -65,6 +71,7 @@ def test_warnings_held_back_by_the_cooldown_still_count_for_escalation():
     assert d.decisions[mark].escalated and d.sounds(mark)[0][1] == SoundCue.ALARM
 
 
+# การกันเสียงด้วย cooldown ถูกบันทึกใน log
 def test_cooldown_suppression_is_flagged_for_the_log():
     d = Driver().hold(1, S.NORMAL).hold(1, S.DISTRACTED, "long_distraction").hold(1, S.NORMAL)
     mark = len(d.decisions)
@@ -72,6 +79,7 @@ def test_cooldown_suppression_is_flagged_for_the_log():
     assert d.decisions[mark].suppressed and d.decisions[mark].sound == SoundCue.NONE
 
 
+# ALARM แล้วหน้าหาย ยังดังต่อ
 def test_alarm_dropping_to_no_face_keeps_sounding():
     d = Driver().hold(1, S.NORMAL).hold(3, S.DROWSY_ALARM, "sleep")
     mark = len(d.decisions)
@@ -79,6 +87,7 @@ def test_alarm_dropping_to_no_face_keeps_sounding():
     assert d.sounds(mark) == [(4.0, SoundCue.WARNING), (14.0, SoundCue.WARNING)]
 
 
+# ALARM ลดเป็น WARNING ง่วง เสียงหยุด
 def test_alarm_dropping_to_a_drowsy_warning_just_stops():
     d = Driver().hold(1, S.NORMAL).hold(3, S.DROWSY_ALARM, "sleep")
     mark = len(d.decisions)
@@ -86,6 +95,7 @@ def test_alarm_dropping_to_a_drowsy_warning_just_stops():
     assert d.sounds(mark) == [(4.0, SoundCue.STOP)]
 
 
+# WARNING ที่ถูกยกระดับ หยุดเมื่อหาย
 def test_escalated_warning_stops_when_it_clears():
     d = Driver().hold(1, S.NORMAL)
     for reason in ("microsleep", "head_nod", "yawning"):
@@ -94,6 +104,7 @@ def test_escalated_warning_stops_when_it_clears():
     assert d.sounds()[-1][1] == SoundCue.STOP
 
 
+# event cleared ไม่ลบข้อความ toast
 def test_cleared_event_does_not_wipe_a_toast():
     calibrated = AlertEvent(0.0, S.NORMAL, "calibrated", AlertLevel.INFO, {})
     cleared = AlertEvent(0.2, S.NORMAL, "cleared", AlertLevel.INFO, {})
@@ -102,6 +113,7 @@ def test_cleared_event_does_not_wipe_a_toast():
     assert m.handle(LogicOutput(S.NORMAL, (cleared,)), 0.2).toast == MESSAGES["calibrated"]
 
 
+# calibrate ใหม่แสดงแถบความคืบหน้า ไม่ใช่ toast ซ้ำ
 def test_recalibrating_shows_the_bar_not_a_second_toast():
     event = AlertEvent(0.0, S.NORMAL, "recalibrating", AlertLevel.INFO, {})
     out = LogicOutput(S.NORMAL, (event,), (), {"calibrating": 1.0})
@@ -109,6 +121,7 @@ def test_recalibrating_shows_the_bar_not_a_second_toast():
     assert decision.toast is None and decision.message == "Calibrating - look ahead"
 
 
+# LogSink บันทึกการแจ้งที่ถูกกันเสียง
 def test_log_sink_logs_suppressed_announcements(caplog):
     d = AlertDecision(1.0, S.DISTRACTED, AlertLevel.WARNING, "long_distraction", "x", False,
                       SoundCue.NONE, suppressed=True)  # fmt: skip
@@ -120,6 +133,7 @@ def test_log_sink_logs_suppressed_announcements(caplog):
 # -- sound recovery ---------------------------------------------------------------
 
 
+# อุปกรณ์เสียงหลุดแล้วกลับมา เสียงกลับมาด้วย
 def test_sound_comes_back_after_the_device_returns(caplog):
     now = [0.0]
     attempts = []
@@ -147,6 +161,7 @@ def test_sound_comes_back_after_the_device_returns(caplog):
     assert "audio available again" in caplog.text
 
 
+# ไม่มี sounddevice -> ทำงานต่อแบบไม่มีเสียง
 def test_missing_sounddevice_module_is_a_silent_fallback(monkeypatch):
     monkeypatch.setitem(sys.modules, "sounddevice", None)  # what the mediapipe guard does
     sink = SoundSink(CFG, _sounddevice)
@@ -155,6 +170,7 @@ def test_missing_sounddevice_module_is_a_silent_fallback(monkeypatch):
     assert not sink.available
 
 
+# คิวเสียงเต็ม ยังเก็บคำสั่งหยุดล่าสุด
 def test_full_queue_keeps_the_latest_stop():
     gate = threading.Event()
     backend = FakeBackend(gate)
@@ -168,6 +184,7 @@ def test_full_queue_keeps_the_latest_stop():
     assert backend.calls[-2:] == ["stop", "stop"]  # the STOP cue, then close()
 
 
+# AlertManager บอกได้ว่ามีเสียงหรือไม่
 def test_manager_reports_sound_availability():
     class Fake:
         available = False
@@ -184,6 +201,7 @@ def test_manager_reports_sound_availability():
     assert AlertManager(CFG, [Fake()]).sound_available is True
 
 
+# banner แสดงว่าเสียงปิด
 def test_banner_shows_sound_off():
     with_tag, without = (np.zeros((480, 640, 3), np.uint8) for _ in range(2))
     d = AlertDecision(0.0, S.NORMAL, AlertLevel.INFO, None, None, False, SoundCue.NONE)
@@ -192,6 +210,7 @@ def test_banner_shows_sound_off():
     assert with_tag[400:450, 520:].any() and not without[400:450, 520:].any()
 
 
+# replay ไฟล์แบบไม่มีจอ ปิดเสียงอัตโนมัติ
 def test_headless_file_replay_is_muted(monkeypatch, synthetic_clip):
     built = []
     monkeypatch.setattr(app_module, "build_perception", lambda cfg: _no_face_perception())

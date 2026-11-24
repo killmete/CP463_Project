@@ -22,12 +22,14 @@ from eval.catalog import Clip
 from eval.labels import intervals, truth_for
 from eval.replay import load_features, replay, to_frames
 
+# label ต่อเฟรม -> เงื่อนไขใน Trace ที่ logic ใช้ตัดสินเรื่องเดียวกัน (ใช้คิด precision/recall ต่อเฟรม)
 FRAME_LABELS = {  # label -> Trace attribute with logic's matching per-frame condition
     "eyes_closed": "closed",
     "look_aside": "off_road",
     "nod": "nod",
     "drowsy": "drowsy_reason",
 }
+# ค่าคงที่ของการให้คะแนนระดับ event (ช่วงเวลาที่ยอมรับว่าจับได้ และความยาวขั้นต่ำของ event)
 YAWN_MATCH_S = (-1.0, 2.5)  # a yawn counted from 1 s before to 2.5 s after the label matches
 EVENT_GRACE_S = 1.0  # an alert up to this long after a labelled event ends still catches it
 MIN_YAWN_S = 0.5  # shorter labelled "yawns" are not yawns for this metric
@@ -36,6 +38,7 @@ MIN_YAWN_S = 0.5  # shorter labelled "yawns" are not yawns for this metric
 MIN_NOD_S = 1.0
 
 
+# คลิปที่ไม่มีใครง่วง: การเตือนง่วงทุกครั้งในคลิปนี้ = false alarm
 def negative_clip(clip: Clip) -> bool:
     """Clips where nobody is drowsy: any drowsiness alert there is a false alarm."""
     return (
@@ -46,6 +49,7 @@ def negative_clip(clip: Clip) -> bool:
     )
 
 
+# คลิปที่คนขับไม่ควรหันออกนาน: ใช้นับการเตือนเสียสมาธิที่ผิด
 def calm_clip(clip: Clip) -> bool:
     """Clips without gaze labels where the driver should not look away for long."""
     return (clip.dataset == "uta" and clip.kind == "0") or (
@@ -53,6 +57,7 @@ def calm_clip(clip: Clip) -> bool:
     )
 
 
+# ผลคะแนนของ 1 คลิป: นับ tp/fp/fn/tn ต่อเฟรม, เวลาที่จับ event ได้, จำนวนการเตือน, PERCLOS เฉลี่ย
 @dataclass
 class ClipScore:
     clip: Clip
@@ -73,6 +78,7 @@ class ClipScore:
     perclos_alert: bool = False  # PERCLOS warning/alarm active at any time after calibration
 
 
+# event นี้ถูกจับได้ไหม: คืนเวลาที่ใช้กว่าจะจับได้ (delay) หรือ None ถ้าพลาด
 def _caught(flag: np.ndarray, t: np.ndarray, start: float, end: float) -> float | None:
     """Delay from `start` to the first flagged frame in [start, end + grace], or None."""
     window = (t >= start) & (t <= end + EVENT_GRACE_S) & flag
@@ -80,6 +86,7 @@ def _caught(flag: np.ndarray, t: np.ndarray, start: float, end: float) -> float 
     return float(t[hits[0]] - start) if hits.size else None
 
 
+# นับการตรวจจับที่เริ่มขึ้นห่างจาก event จริงทุกตัว = false positive ระดับ event
 def _false_onsets(flag, t, scored, labelled_ivs) -> int:
     """Detections that start on a scored frame and near no labelled event.
 
@@ -95,6 +102,7 @@ def _false_onsets(flag, t, scored, labelled_ivs) -> int:
     )
 
 
+# นับจำนวนครั้งที่เตือน: ช่วงที่ติดกันใกล้กว่า join_gap_s (rearm_s) นับเป็นครั้งเดียว
 def episodes(flag: np.ndarray, t: np.ndarray, join_gap_s: float) -> int:
     """Runs of `flag`; runs separated by less than join_gap_s count once."""
     if not flag.any():
@@ -106,6 +114,7 @@ def episodes(flag: np.ndarray, t: np.ndarray, join_gap_s: float) -> int:
     return 1 + int((gaps >= join_gap_s).sum())
 
 
+# ให้คะแนน 1 คลิป: replay logic ด้วย config นี้แล้วเทียบกับ label; ไม่นับเฟรมก่อน calibrate เสร็จ
 def score_clip(clip: Clip, arrays: dict[str, np.ndarray], cfg: Config) -> ClipScore:
     frames = to_frames(arrays)
     tr = replay(frames, cfg)
@@ -120,6 +129,7 @@ def score_clip(clip: Clip, arrays: dict[str, np.ndarray], cfg: Config) -> ClipSc
     )
     truth = truth_for(clip, n)
 
+    # 1) คะแนนต่อเฟรม: เทียบ pred กับ gt เฉพาะเฟรมที่มี label และ calibrate แล้ว
     for label, attr in FRAME_LABELS.items():
         if not truth.has(label):
             continue
@@ -134,10 +144,12 @@ def score_clip(clip: Clip, arrays: dict[str, np.ndarray], cfg: Config) -> ClipSc
             ]
         )
 
+    # ช่วง event จาก label ที่ยาวพอ และเริ่มหลัง calibrate
     def labelled(label: str, min_s: float, merge_gap_s: float) -> list[tuple[float, float]]:
         ivs = intervals(truth.tracks[label] & truth.annotated[label], fps, merge_gap_s)
         return [(a, b) for a, b in ivs if b - a >= min_s and a >= start]
 
+    # 2) คะแนนระดับ event: หลับตานาน (microsleep), พยักหน้า, หันออกนาน
     event_rules = (
         # A closure must be continuous to be a microsleep, so closures are never joined.
         ("closure", "eyes_closed", tr.reason("microsleep") | tr.reason("sleep"),
@@ -153,6 +165,7 @@ def score_clip(clip: Clip, arrays: dict[str, np.ndarray], cfg: Config) -> ClipSc
         every = intervals(truth.tracks[source], fps, merge_gap_s=gap)
         score.event_fp[label] = _false_onsets(flag, t, valid & truth.annotated[source], every)
 
+    # 3) การหาว: จับคู่การหาวที่ตรวจพบกับ label ทีละตัว (หนึ่งการตรวจพบใช้ได้ครั้งเดียว)
     yawn_times = [y for y in tr.yawn_times if y >= start]
     score.yawns_detected = len(yawn_times)
     if truth.has("yawn"):
@@ -182,6 +195,7 @@ def score_clip(clip: Clip, arrays: dict[str, np.ndarray], cfg: Config) -> ClipSc
             if k not in used
         )
 
+    # 4) นับจำนวนครั้งที่เตือนง่วง/เสียสมาธิ และ PERCLOS เฉลี่ยของคลิป
     rearm = cfg.alerts.rearm_s
     score.drowsy_alerts = episodes(tr.drowsy_reason & valid, t, rearm)
     distracted = tr.reason("long_distraction") | tr.reason("short_distraction")
@@ -198,6 +212,7 @@ def score_clip(clip: Clip, arrays: dict[str, np.ndarray], cfg: Config) -> ClipSc
     return score
 
 
+# อ่าน CSV แล้วให้คะแนน
 def score(clip: Clip, features_csv, cfg: Config) -> ClipScore:
     return score_clip(clip, load_features(features_csv), cfg)
 
@@ -205,6 +220,7 @@ def score(clip: Clip, features_csv, cfg: Config) -> ClipScore:
 # -- summaries -----------------------------------------------------------------------
 
 
+# precision, recall, F1 จาก (tp, fp, fn); ไม่มีข้อมูล -> NaN
 def prf(counts) -> dict[str, float]:
     tp, fp, fn = (float(x) for x in counts[:3])
     p = tp / (tp + fp) if tp + fp else float("nan")
@@ -213,6 +229,7 @@ def prf(counts) -> dict[str, float]:
     return {"precision": p, "recall": r, "f1": f1, "support": tp + fn}
 
 
+# AUC: โอกาสที่คลิปง่วงได้คะแนนสูงกว่าคลิปไม่ง่วง (0.5 = เดาสุ่ม, 1 = แยกได้หมด)
 def auc(pos: list[float], neg: list[float]) -> float:
     """P(score of a random positive > a random negative), ties count half."""
     pos_a, neg_a = np.asarray(pos, float), np.asarray(neg, float)
@@ -223,9 +240,11 @@ def auc(pos: list[float], neg: list[float]) -> float:
     return float(((diff > 0).sum() + 0.5 * (diff == 0).sum()) / diff.size)
 
 
+# ประเภทคลิป YawDD ที่มีการหาว
 YAWDD_POSITIVE = ("Yawning", "TalkingYawning", "mixed")  # dash clips contain yawns too
 
 
+# สรุปผลของหลายคลิปรวมกัน (ตัวเลขที่ใช้ใน report และ tuning)
 @dataclass
 class Summary:
     clips: int
@@ -239,6 +258,7 @@ class Summary:
     yawdd: dict[str, float]  # clip level: a yawning clip should count >= 1 yawn, others 0
     uta: dict[str, float]  # alert (0) vs drowsy (10) videos
 
+    # อ่านค่าด้วยชื่อแบบมีจุด เช่น 'events.yawn.f1' (tune ใช้เป็นเป้าหมาย)
     def get(self, key: str) -> float:
         """Dotted lookup used by tuning objectives, e.g. 'events.yawn.f1'."""
         node = self
@@ -252,6 +272,7 @@ class Summary:
         return float(node)
 
 
+# รวมคะแนนทุกคลิป: บวก tp/fp/fn ก่อนแล้วค่อยคิด F1 (ไม่เฉลี่ย F1 ของแต่ละคลิป)
 def summarize(scores: Iterable[ClipScore]) -> Summary:
     scores = list(scores)
     frame_counts: dict[str, np.ndarray] = defaultdict(lambda: np.zeros(4))
@@ -278,6 +299,7 @@ def summarize(scores: Iterable[ClipScore]) -> Summary:
         if s.clip.dataset == "uta" and s.clip.kind in uta_perclos and s.scored_s > 0:
             uta_perclos[s.clip.kind].append(s.mean_perclos)
             uta_alert[s.clip.kind].append(s.perclos_alert)
+    # คะแนน event: recall, precision, F1, และ delay มัธยฐาน
     events = {}
     for label, delays in caught.items():
         hits = [d for d in delays if d is not None]
@@ -287,6 +309,7 @@ def summarize(scores: Iterable[ClipScore]) -> Summary:
             "events": float(len(delays)),
             "median_delay_s": float(np.median(hits)) if hits else float("nan"),
         }
+    # ระดับคลิป: YawDD (จับการหาวในคลิปหาวได้ไหม) และ UTA (คลิปง่วงถูกเตือนไหม)
     tpr = float(np.mean(yawdd_hit[True])) if yawdd_hit[True] else float("nan")
     fpr = float(np.mean(yawdd_hit[False])) if yawdd_hit[False] else float("nan")
     u_tpr = float(np.mean(uta_alert["10"])) if uta_alert["10"] else float("nan")

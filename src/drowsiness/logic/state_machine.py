@@ -12,6 +12,7 @@ from collections.abc import Mapping
 from drowsiness.logic.rules import REASON_STATE
 from drowsiness.types import AlertEvent, AlertLevel, DriverState
 
+# ลำดับความรุนแรง: ALARM > NO_FACE > DISTRACTED > WARNING > NORMAL
 RANK = {
     DriverState.CALIBRATING: 0,
     DriverState.NORMAL: 0,
@@ -20,6 +21,7 @@ RANK = {
     DriverState.NO_FACE: 3,
     DriverState.DROWSY_ALARM: 4,
 }
+# ระดับการเตือนของแต่ละสถานะ (INFO / WARNING / ALARM)
 LEVEL = {
     DriverState.CALIBRATING: AlertLevel.INFO,
     DriverState.NORMAL: AlertLevel.INFO,
@@ -30,6 +32,8 @@ LEVEL = {
 }
 
 
+# รวมเหตุผลหลายข้อเป็นสถานะเดียว: ขึ้นสถานะรุนแรงทันที
+# แต่ลงได้ต่อเมื่อปลอดภัยต่อเนื่อง clear_s วินาที (hysteresis) กันสถานะกระพริบ
 class StateMachine:
     def __init__(self, clear_s: float) -> None:
         self.clear_s = clear_s
@@ -50,21 +54,26 @@ class StateMachine:
         """
         if self._entered_at is None:
             self._entered_at = t
+        # สถานะที่ควรเป็น = สถานะของเหตุผลที่รุนแรงที่สุด (ตัวแรก) หรือ base ถ้าไม่มีเหตุผล
         candidate = REASON_STATE[reasons[0]] if reasons else base
+        # สถานะเดิม -> ไม่มี event
         if candidate == self.state:
             self._clear_since = None
             return []
+        # จะลดความรุนแรง -> ต้องรอให้ครบ clear_s ก่อน
         if RANK[candidate] < RANK[self.state]:
             if self._clear_since is None:
                 self._clear_since = t
             if t - self._clear_since < self.clear_s:
                 return []
+        # เปลี่ยนสถานะ: สร้าง event 1 ครั้งต่อการเปลี่ยน (ไม่ใช่ทุกเฟรม)
         reason = reasons[0] if reasons else "cleared"
         extra = dict(details.get(reason, {}))
         if not reasons:
             extra["duration_s"] = t - self._entered_at
         return [self.force(t, candidate, reason, reasons, extra)]
 
+    # เปลี่ยนสถานะทันทีและคืน event ที่อธิบายการเปลี่ยน
     def force(
         self,
         t: float,

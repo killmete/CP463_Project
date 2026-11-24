@@ -1,3 +1,4 @@
+# เทสต์ AlertManager: cooldown, เสียงซ้ำ, ลดระดับ, ยกระดับ, ข้อความ INFO
 """AlertManager policy: cooldown, repeats, de-escalation, escalation, INFO toasts.
 
 Driven by hand-built LogicOutput sequences and timestamps (no sleeping, no audio).
@@ -27,6 +28,7 @@ LEVEL = {
 }
 
 
+# sink ปลอม: เก็บทุกการตัดสินไว้ตรวจ
 class Recorder:
     def __init__(self):
         self.decisions = []
@@ -39,6 +41,7 @@ class Recorder:
         self.closed = True
 
 
+# ป้อนสถานะตามเวลาให้ AlertManager แบบเดียวกับที่ logic ทำ (fps คงที่)
 class Driver:
     """Feeds the manager a state timeline at a fixed frame rate, like logic would."""
 
@@ -67,11 +70,13 @@ class Driver:
                 != SoundCue.NONE]  # fmt: skip
 
 
+# สถานะปกติ: ไม่มี banner ไม่มีเสียง
 def test_normal_shows_no_banner_and_no_sound():
     d = Driver().hold(5, S.NORMAL)
     assert all(x.message is None and x.sound == SoundCue.NONE for x in d.decisions)
 
 
+# ALARM ดังทันที ดังซ้ำ และหยุดเมื่อหาย
 def test_alarm_sounds_at_once_repeats_and_stops_on_clear():
     d = Driver().hold(1, S.NORMAL).hold(5, S.DROWSY_ALARM, "sleep").hold(1, S.NORMAL)
     assert d.sounds() == [
@@ -82,6 +87,7 @@ def test_alarm_sounds_at_once_repeats_and_stops_on_clear():
     assert alarm.message == MESSAGES["sleep"]
 
 
+# WARNING ดังครั้งแรก แล้วดังซ้ำถ้ายังเป็นอยู่
 def test_warning_chimes_then_repeats_while_it_persists():
     d = Driver().hold(1, S.NORMAL).hold(21, S.DISTRACTED, "long_distraction")
     assert d.sounds() == [(1.0, SoundCue.WARNING), (11.0, SoundCue.WARNING),
@@ -89,6 +95,7 @@ def test_warning_chimes_then_repeats_while_it_persists():
     assert not d.decisions[-1].flash
 
 
+# เตือนเรื่องเดิมภายใน cooldown ไม่ดังซ้ำ
 @pytest.mark.parametrize("gap_s, sounded", [(27.9, False), (28.1, True)])  # 30 s after t=1
 def test_same_warning_within_cooldown_is_not_sounded_again(gap_s, sounded):
     # First episode sounded at t=1, cleared at t=3; it comes back after gap_s.
@@ -100,6 +107,7 @@ def test_same_warning_within_cooldown_is_not_sounded_again(gap_s, sounded):
     assert d.decisions[-1].message == MESSAGES["long_distraction"]  # banner shows anyway
 
 
+# cooldown แยกตามเหตุผล
 def test_cooldown_is_per_reason():
     d = Driver().hold(1, S.NORMAL).hold(2, S.DISTRACTED, "long_distraction").hold(2, S.NORMAL)
     mark = len(d.decisions)
@@ -107,6 +115,7 @@ def test_cooldown_is_per_reason():
     assert d.sounds(mark) == [(5.0, SoundCue.WARNING)]
 
 
+# ALARM ไม่สน cooldown (อันตรายต้องดังเสมอ)
 def test_alarm_ignores_the_cooldown():
     d = Driver().hold(1, S.NORMAL).hold(1, S.DROWSY_ALARM, "sleep").hold(1, S.NORMAL)
     mark = len(d.decisions)
@@ -114,6 +123,7 @@ def test_alarm_ignores_the_cooldown():
     assert d.sounds(mark)[0] == (3.0, SoundCue.ALARM)
 
 
+# ลดจาก ALARM หยุดเสียงโดยไม่ดังใหม่
 def test_de_escalation_stops_the_alarm_without_a_new_chime():
     d = Driver().hold(1, S.NORMAL).hold(2, S.DROWSY_ALARM, "sleep")
     mark = len(d.decisions)
@@ -122,6 +132,7 @@ def test_de_escalation_stops_the_alarm_without_a_new_chime():
     assert d.decisions[-1].level == AlertLevel.WARNING and not d.decisions[-1].flash
 
 
+# เตือนง่วงซ้ำหลายครั้ง ยกระดับเป็น ALARM
 def test_repeated_drowsiness_warnings_escalate():
     d = Driver().hold(1, S.NORMAL)
     sounds = []
@@ -136,6 +147,7 @@ def test_repeated_drowsiness_warnings_escalate():
     assert d.decisions[-1].escalated is False  # cleared
 
 
+# การเตือนที่เก่าเกิน window ไม่นับยกระดับ
 def test_escalation_window_expires():
     cfg = dataclasses.replace(CFG, escalation_window_s=10.0)
     d = Driver(cfg).hold(1, S.NORMAL)
@@ -146,6 +158,7 @@ def test_escalation_window_expires():
     assert d.sounds(mark)[0][1] == SoundCue.WARNING and not d.decisions[mark].escalated
 
 
+# เตือนเสียสมาธิไม่ยกระดับ
 def test_distraction_warnings_do_not_escalate():
     d = Driver().hold(1, S.NORMAL)
     for reason in ("long_distraction", "short_distraction", "no_face"):
@@ -155,6 +168,7 @@ def test_distraction_warnings_do_not_escalate():
         assert not d.decisions[mark].escalated
 
 
+# event INFO แสดงข้อความสั้น (toast) ไม่มีเสียง
 def test_info_events_show_a_toast_and_are_never_sounded():
     info = AlertEvent(0.0, S.NORMAL, "calibrated", AlertLevel.INFO, {})
     d = Driver().hold(0.1, S.CALIBRATING).hold(5, S.NORMAL, events=(info,))
@@ -164,11 +178,13 @@ def test_info_events_show_a_toast_and_are_never_sounded():
     assert abs(sum(t is not None for t in toasts) - CFG.info_display_s * 10) <= 1
 
 
+# ตอน calibrate แสดงข้อความ calibrate
 def test_calibrating_shows_the_calibrating_message():
     d = Driver().hold(1, S.CALIBRATING).hold(1, S.NORMAL, metrics={"calibrating": 1.0})
     assert {x.message for x in d.decisions} == {CALIBRATING}
 
 
+# banner แสดงเหตุผลที่ทำให้เข้าสถานะ ตลอดที่สถานะยังอยู่
 def test_banner_keeps_the_entry_reason_while_the_state_is_held():
     # During clear_s the state is held but its reason is no longer active.
     d = Driver().hold(1, S.NORMAL).hold(0.5, S.DROWSY_WARNING, "microsleep")
@@ -176,17 +192,20 @@ def test_banner_keeps_the_entry_reason_while_the_state_is_held():
     assert d.decisions[-1].message == MESSAGES["microsleep"]
 
 
+# เหตุผลที่ไม่รู้จัก ได้ข้อความทั่วไป
 def test_unknown_reason_gets_a_generic_message():
     d = Driver().hold(1, S.NORMAL).hold(1, S.DISTRACTED, "new_rule")
     assert d.decisions[-1].message == "Attention - watch the road"
 
 
+# ทุกเหตุผลมีข้อความสั้น เป็น ASCII (OpenCV วาดภาษาไทยไม่ได้)
 def test_every_reason_has_a_short_ascii_message():
     texts = [*MESSAGES.values(), ESCALATED, CALIBRATING]
     assert set(REASONS) <= set(MESSAGES)
     assert all(len(t) <= MAX_CHARS and t.isascii() for t in texts)
 
 
+# input เดิมได้ผลเดิม (deterministic)
 def test_same_inputs_give_the_same_decisions():
     def scenario():
         d = Driver().hold(1, S.NORMAL).hold(3, S.DROWSY_ALARM, "sleep")
@@ -195,6 +214,7 @@ def test_same_inputs_give_the_same_decisions():
     assert scenario() == scenario()
 
 
+# sink หนึ่งพัง sink อื่นยังทำงาน
 def test_a_failing_sink_does_not_stop_the_others():
     class Broken:
         def emit(self, decision):

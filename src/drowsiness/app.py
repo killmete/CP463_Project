@@ -29,12 +29,14 @@ from drowsiness.ui import draw_banner, draw_logic, draw_perception, draw_status
 
 log = logging.getLogger("drowsiness")
 
+# ชื่อหน้าต่าง, ปุ่มออก (q หรือ Esc), ปุ่ม calibrate ใหม่ (c)
 WINDOW_NAME = "Drowsiness Detection"
 _QUIT_KEYS = {ord("q"), 27}  # q, Esc
 _RECALIBRATE_KEY = ord("c")
 
 
 @dataclass(frozen=True, slots=True)
+# สถิติตอนจบการรัน: จำนวนเฟรม, fps, latency p50/p95, เฟรมที่ทิ้ง, จำนวนการเตือน
 class RunStats:
     frames: int
     duration_s: float
@@ -49,6 +51,7 @@ class RunStats:
     alerts_sounded: int = 0
 
 
+# วัด FPS จากเวลาของเฟรมในช่วง window_s วินาทีล่าสุด
 class FpsMeter:
     """Frames per second over a rolling time window (wall clock)."""
 
@@ -61,6 +64,7 @@ class FpsMeter:
         while now - self._times[0] > self.window_s:
             self._times.popleft()
         span = self._times[-1] - self._times[0]
+        # n เฟรมมี n-1 ช่วง จึงหาร (n-1) ด้วยช่วงเวลา
         return (len(self._times) - 1) / span if span > 0 else 0.0
 
 
@@ -68,6 +72,8 @@ def _percentile(values: list[float], q: float) -> float:
     return float(np.percentile(values, q)) if values else 0.0
 
 
+# ลูปหลัก: อ่านภาพ -> perception -> logic -> alerts -> วาดจอ วนจนจบ
+# รับทุกส่วนเป็นพารามิเตอร์ เทสต์จึงส่งตัวปลอมเข้ามาได้
 def run_loop(
     source: FrameSource,
     cfg: Config,
@@ -88,6 +94,7 @@ def run_loop(
     latencies_ms: list[float] = []
     perception_ms: list[float] = []
     alert_events = alerts_sounded = 0
+    # เก็บผลการเตือนล่าสุดไว้ ถ้า logic ข้ามเฟรม banner ยังค้างอยู่
     decision = None  # the last one is kept on screen if logic skips a frame
     fps = 0.0
     last_latency_ms = 0.0
@@ -97,15 +104,18 @@ def run_loop(
 
     try:
         while max_frames is None or len(latencies_ms) < max_frames:
+            # 1) อ่านภาพ (None = ภาพหมด)
             packet = source.read()
             if packet is None:
                 break
 
+            # 2) perception: หาหน้าและวัดค่า แล้วเขียน CSV ถ้าเปิดไว้
             out = perception.process(packet) if perception is not None else None
             if out is not None:
                 perception_ms.append(out.perception_ms)
                 if feature_log is not None:
                     feature_log.write(out, packet.index)
+            # 3) logic: ตัดสินสถานะ; ถ้าเวลาถอยหลัง (ValueError) ข้ามเฟรมนี้แทนการ crash
             logic_out = None
             if out is not None and monitor is not None:
                 try:
@@ -114,11 +124,13 @@ def run_loop(
                     log.warning("logic skipped frame %d: %s", packet.index, exc)
                 else:
                     alert_events += len(logic_out.events)
+                    # 4) alerts: ตัดสินข้อความ/เสียง (เสียงเล่นใน thread แยก ไม่บล็อกลูป)
                     if alerts is not None:  # logs the events; sound runs on its own thread
                         decision = alerts.handle(logic_out, out.features.timestamp)
                         alerts_sounded += decision.sounded
 
             fps = fps_meter.tick(time.perf_counter())
+            # 5) วาดจอ: perception -> logic -> status -> banner สุดท้ายจะได้ไม่มีอะไรทับ
             if display:
                 if out is not None:
                     draw_perception(packet.image, out, cfg.overlay)
@@ -128,6 +140,7 @@ def run_loop(
                 if decision is not None and alerts is not None:  # last: nothing covers it
                     draw_banner(packet.image, decision, decision.timestamp, cfg.alerts.flash_hz,
                                 sound_off=not alerts.sound_available)  # fmt: skip
+                # แสดงภาพ แล้วเช็คปุ่ม: q/Esc หรือปิดหน้าต่าง = ออก, c = calibrate ใหม่
                 cv2.imshow(WINDOW_NAME, packet.image)
                 key = cv2.waitKey(1) & 0xFF
                 visible = cv2.getWindowProperty(WINDOW_NAME, cv2.WND_PROP_VISIBLE)
@@ -136,14 +149,17 @@ def run_loop(
                 if key == _RECALIBRATE_KEY and monitor is not None:
                     monitor.recalibrate()
 
+            # latency = เวลาตอนนี้ - เวลาที่ grab ภาพ (งบ < 50 ms)
             last_latency_ms = (time.perf_counter() - packet.grabbed_at) * 1000.0
             latencies_ms.append(last_latency_ms)
+    # Ctrl+C: หยุดอย่างสะอาดและยังรายงานสถิติ
     except KeyboardInterrupt:
         interrupted = True  # Ctrl+C: stop cleanly and still report stats
     finally:
         if display:
             cv2.destroyAllWindows()
 
+    # สรุปสถิติทั้งการรัน
     duration = time.perf_counter() - start
     frames = len(latencies_ms)
     return RunStats(
@@ -161,6 +177,7 @@ def run_loop(
     )
 
 
+# ตัวเลือก command line ทั้งหมด
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="drowsiness", description="Real-time driver drowsiness and inattention detection."
@@ -182,9 +199,11 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+# จุดเริ่มโปรแกรม: อ่านตัวเลือก -> โหลด config -> เปิดทุกส่วน -> รันลูป -> คืน exit code
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
 
+    # แปลง flag จาก command line เป็นค่าที่ทับ config
     overrides: dict = {"capture": {}, "runtime": {}, "perception": {}, "alerts": {}}
     if args.source is not None:
         overrides["capture"]["source"] = args.source
@@ -196,12 +215,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         overrides["perception"]["enabled"] = False
     if args.mute:
         overrides["alerts"]["sound"] = False
+    # replay ไฟล์แบบไม่มีจอ รันเร็วกว่าเวลาจริง เสียงจะซ้อนกัน จึงปิดเสียง
     if args.no_display and args.source is not None and not args.source.isdigit():
         # A headless file replay runs faster than real time: alarms would stack up.
         overrides["alerts"]["sound"] = False
     if args.no_debug:
         overrides["overlay"] = {"landmarks": False, "values": False, "logic": False}
     try:
+        # config ผิด -> แจ้ง error แล้วจบด้วย exit code 2
         cfg = load_config(args.config, overrides)
     except ConfigError as e:
         logging.basicConfig(level=logging.ERROR)
@@ -220,10 +241,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         # Closed in reverse order on every path: alerts (stops sound), feature log,
         # source, perception.
+        # ExitStack: เปิดหลายอย่างตามเงื่อนไข แล้วปิดย้อนลำดับเสมอแม้เกิด error
+        # (alerts หยุดเสียง -> CSV -> แหล่งภาพ -> perception)
         with contextlib.ExitStack() as stack:
             perception = (
                 stack.enter_context(build_perception(cfg)) if cfg.perception.enabled else None
             )
+            # เปิด perception ก่อน (โหลดโมเดลนาน เจอปัญหาเร็ว) แล้วค่อยเปิดแหล่งภาพ
             source = stack.enter_context(open_source(cfg.capture))
             if cfg.runtime.log_features is not None:
                 # Opened only once the source works, so a bad --source leaves no stub CSV.
@@ -232,6 +256,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                         cfg.runtime.log_features, blendshapes=cfg.perception.output_blendshapes
                     )
                 )
+            # logic และ alerts ต้องมี perception ก่อน (โหมด --no-perception ไม่มี)
             monitor = alerts = None
             if perception is not None:
                 monitor = DriverMonitor(cfg)
@@ -240,6 +265,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 source, cfg, display, cfg.runtime.max_frames, perception, feature_log, monitor,
                 alerts,
             )  # fmt: skip
+    # ต้องจับก่อน OSError: ModelNotFoundError ก็เป็น FileNotFoundError (OSError) ด้วย
+    # exit code: setup ผิด 2, กล้อง/ไฟล์ผิด 1, OpenCV ผิด 1, Ctrl+C 0
     except PerceptionSetupError as e:  # before CameraError/OSError: a missing model is setup
         log.error("%s", e)
         return 2
@@ -254,6 +281,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         log.info("interrupted")
         return 0
 
+    # log สรุปผล: fps, latency, เฟรมที่ทิ้ง, จำนวนการเตือน
     if stats.interrupted:
         log.info("interrupted")
     log.info(

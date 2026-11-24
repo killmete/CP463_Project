@@ -16,6 +16,8 @@ import numpy as np
 
 
 @dataclass(frozen=True, slots=True)
+# ภาพ 1 เฟรมจาก capture: ภาพ, เวลา (ใช้ตัดสิน), เลขเฟรม, เวลาจริงตอน grab (วัด latency)
+# frozen=True = แก้ค่าไม่ได้หลังสร้าง กันส่วนอื่นแอบเปลี่ยนข้อมูล
 class FramePacket:
     """One captured frame."""
 
@@ -31,6 +33,7 @@ class FramePacket:
 
 
 @dataclass(frozen=True, slots=True)
+# ค่าที่ perception วัดได้ใน 1 เฟรม (ส่งให้ logic); ค่าที่หาไม่ได้เป็น None
 class FrameFeatures:
     """Per-frame measurements from the perception layer. Missing values are None.
 
@@ -55,6 +58,7 @@ class FrameFeatures:
 
 
 @dataclass(frozen=True, slots=True)
+# ผลของ perception: features ไป logic, landmarks ไปวาด overlay, เวลาที่ใช้
 class PerceptionOutput:
     """What perception hands to the app: features for logic, landmarks for the overlay.
 
@@ -69,6 +73,7 @@ class PerceptionOutput:
     """Wall time spent in perception for this frame."""
 
 
+# สถานะคนขับ 6 แบบ
 class DriverState(StrEnum):
     CALIBRATING = "CALIBRATING"
     NORMAL = "NORMAL"
@@ -78,6 +83,7 @@ class DriverState(StrEnum):
     NO_FACE = "NO_FACE"
 
 
+# ระดับการเตือน เป็นตัวเลขจึงเทียบมาก/น้อยได้ (INFO < WARNING < ALARM)
 class AlertLevel(IntEnum):
     INFO = 0
     WARNING = 1
@@ -85,6 +91,7 @@ class AlertLevel(IntEnum):
 
 
 @dataclass(frozen=True, slots=True)
+# event จาก logic เมื่อสถานะเปลี่ยน (เริ่ม/รุนแรงขึ้น/จบ) ไม่ใช่ทุกเฟรม
 class AlertEvent:
     """Emitted by the logic layer when the driver state starts, escalates or ends."""
 
@@ -97,6 +104,7 @@ class AlertEvent:
 
 
 @dataclass(frozen=True, slots=True)
+# สิ่งที่ logic คืนทุกเฟรม: สถานะ, events, เหตุผลที่เกิดขึ้น, ค่าสดสำหรับแสดงผล
 class LogicOutput:
     """What logic hands to the app each frame. Alerts consume `events`; ui shows the rest."""
 

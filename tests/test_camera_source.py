@@ -1,3 +1,4 @@
+# เทสต์ CameraSource ด้วยกล้องปลอม (thread อ่านภาพ, ทิ้งเฟรมเก่า, กล้องหลุด)
 import os
 import threading
 import time
@@ -10,6 +11,7 @@ from drowsiness.capture import camera as camera_module
 from drowsiness.capture.camera import CameraError, CameraSource, backend_order
 
 
+# แทน cv2.VideoCapture: สร้างเฟรมที่มีเลขทุก period_s วินาที
 class FakeCapture:
     """Stands in for cv2.VideoCapture: produces numbered frames every `period_s`."""
 
@@ -55,11 +57,13 @@ def fake_cv2(monkeypatch):
     return install
 
 
+# ลำดับ backend ของกล้องที่ลอง (auto บน Windows = msmf แล้ว dshow)
 def test_backend_order():
     assert backend_order("dshow") == ["dshow"]
     assert backend_order("auto") in (["msmf", "dshow"], ["any"])
 
 
+# คืนเฉพาะเฟรมล่าสุด และนับเฟรมที่ทิ้ง (ไม่สะสม latency)
 def test_returns_only_newest_frames_and_counts_drops(fake_cv2):
     with CameraSource(index=0, read_timeout_s=1.0) as source:
         indices = []
@@ -73,12 +77,14 @@ def test_returns_only_newest_frames_and_counts_drops(fake_cv2):
     assert source.dropped_frames > 0
 
 
+# เวลาเฟรมไม่ถอยหลัง
 def test_timestamps_never_decrease(fake_cv2):
     with CameraSource() as source:
         stamps = [source.read().timestamp for _ in range(20)]
     assert stamps == sorted(stamps)
 
 
+# close หยุด thread และปล่อยกล้อง
 def test_close_stops_thread_and_releases(fake_cv2):
     source = CameraSource()
     source.open()
@@ -88,12 +94,14 @@ def test_close_stops_thread_and_releases(fake_cv2):
     assert all(c.released for c in FakeCapture.instances)
 
 
+# เปิดกล้องไม่ได้ -> error
 def test_open_failure_raises(fake_cv2):
     fake_cv2(opens=False)
     with pytest.raises(CameraError):
         CameraSource(backend="any").open()
 
 
+# กล้องหลุด -> error ไม่ใช่จบเงียบๆ
 def test_lost_camera_raises_instead_of_ending_quietly(fake_cv2):
     fake_cv2(fail_after=5)
     start = time.perf_counter()
@@ -107,6 +115,7 @@ def test_lost_camera_raises_instead_of_ending_quietly(fake_cv2):
     assert all(c.released for c in FakeCapture.instances)
 
 
+# กล้องสะดุดแป๊บเดียว ไม่จบการรัน
 def test_brief_glitch_does_not_end_stream(fake_cv2, monkeypatch):
     calls = {"n": 0}
     original_read = FakeCapture.read
@@ -123,6 +132,7 @@ def test_brief_glitch_does_not_end_stream(fake_cv2, monkeypatch):
             assert source.read() is not None
 
 
+# error ใน thread อ่านภาพ ถูกส่งต่อ
 def test_read_error_in_grabber_raises(fake_cv2, monkeypatch):
     def broken_read(self):
         raise cv2.error("device unplugged")
@@ -134,6 +144,7 @@ def test_read_error_in_grabber_raises(fake_cv2, monkeypatch):
                 source.read()
 
 
+# read หลัง close คืน None
 def test_read_after_close_returns_none(fake_cv2):
     source = CameraSource()
     source.open()
@@ -141,16 +152,19 @@ def test_read_after_close_returns_none(fake_cv2):
     assert source.read() is None
 
 
+# read ก่อน open -> error
 def test_read_before_open_raises():
     with pytest.raises(RuntimeError):
         CameraSource().read()
 
 
+# open ซ้ำ -> error
 def test_open_twice_raises(fake_cv2):
     with CameraSource() as source, pytest.raises(RuntimeError, match="already open"):
         source.open()
 
 
+# thread ค้าง: close ไม่ปล่อยกล้องจาก thread อื่น (กัน crash)
 def test_close_with_blocked_grabber_never_releases_from_caller(fake_cv2, monkeypatch):
     monkeypatch.setattr(camera_module, "_JOIN_TIMEOUT_S", 0.1)
     source = CameraSource()
@@ -164,6 +178,7 @@ def test_close_with_blocked_grabber_never_releases_from_caller(fake_cv2, monkeyp
     assert capture.released, "grabber should release once its read returns"
 
 
+# กล้องจริง (รันเมื่อ DROWSINESS_CAMERA_TESTS=1)
 @pytest.mark.camera
 @pytest.mark.skipif(not os.environ.get("DROWSINESS_CAMERA_TESTS"), reason="needs a webcam")
 def test_real_camera_delivers_frames():
