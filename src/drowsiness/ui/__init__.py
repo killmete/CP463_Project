@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+# รวมฟังก์ชันวาดจอ: banner สำหรับคนขับ และ overlay สำหรับ debug
 from drowsiness.ui.banner import banner_height, draw_banner
 from drowsiness.ui.overlay import draw_logic, draw_perception, draw_status
 

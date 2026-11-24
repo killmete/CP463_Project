@@ -1,3 +1,4 @@
+# เทสต์กับ MediaPipe จริง (ต้องมีไฟล์โมเดล ไม่มีจะข้าม)
 """Real MediaPipe Face Landmarker tests (need the model file; see the `model_path` fixture).
 
 The face speed check needs frames with a face, and no face images are kept in the
@@ -28,6 +29,7 @@ def build(model_path: Path, **perception):
     return build_perception(load_config(overrides=overrides))
 
 
+# ภาพว่างเปล่า -> ไม่เจอหน้า
 def test_blank_frame_gives_no_face(model_path):
     with build(model_path) as perception:
         for i in range(3):
@@ -90,6 +92,7 @@ def _run(model_path: Path, frames: list[np.ndarray], clahe: bool):
     return times, outs
 
 
+# มีหน้า: perception เร็วกว่างบเวลา (ตั้ง DROWSINESS_PERF_SOURCE)
 @pytest.mark.perf
 @pytest.mark.parametrize("clahe", [False, True], ids=["plain", "clahe"])
 def test_perception_with_face_is_within_budget(model_path, face_frames, clahe):
@@ -102,6 +105,7 @@ def test_perception_with_face_is_within_budget(model_path, face_frames, clahe):
     assert p95 <= BUDGET_MS
 
 
+# ตรวจว่าเลข landmark ของ MediaPipe จริงตรงกับที่สูตรใช้
 def test_real_face_landmark_layout(model_path, face_frames):
     """Not circular: checks MediaPipe's actual index layout, which the formulas assume."""
     _, outs = _run(model_path, face_frames, clahe=False)
@@ -118,6 +122,7 @@ def test_real_face_landmark_layout(model_path, face_frames):
         assert abs(f.pitch) < 60 and abs(f.yaw) < 60 and abs(f.roll) < 60
 
 
+# เฟรมไม่มีหน้าประมวลผลเร็ว
 @pytest.mark.perf
 def test_no_face_frames_are_fast(model_path):
     times = []

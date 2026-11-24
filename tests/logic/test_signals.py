@@ -1,8 +1,10 @@
+# เทสต์ตัวช่วยใน logic/signals.py: กรองค่า, เงื่อนไขข้ามช่วงขาด, window เวลา
 import pytest
 
 from drowsiness.logic.signals import Condition, EventTimes, MedianSmoother, TimeWindow
 
 
+# median กรองค่ากระโดด 1 เฟรม และข้าม None
 def test_median_smoother_removes_single_spike_and_skips_none():
     s = MedianSmoother(0.1)
     assert s.update(0.0, 1.0) == 1.0
@@ -12,6 +14,7 @@ def test_median_smoother_removes_single_spike_and_skips_none():
     assert s.update(1.0, 0.5) == 0.5  # old samples expired
 
 
+# เงื่อนไขอันตราย (เช่น ตาปิด) ถูกยกข้ามช่วงขาดสั้นๆ
 def test_condition_holds_short_gaps_and_carries_adverse():
     c = Condition(max_gap_s=0.3, adverse=True)
     assert c.update(0.0, True) is True
@@ -22,6 +25,7 @@ def test_condition_holds_short_gaps_and_carries_adverse():
     assert c.duration(1.1) == 0.0
 
 
+# เงื่อนไขปกติกลายเป็นไม่รู้หลังข้อมูลขาด
 def test_condition_non_adverse_becomes_unknown_after_gap():
     c = Condition(max_gap_s=0.3, adverse=False)
     c.update(0.0, True)
@@ -30,6 +34,7 @@ def test_condition_non_adverse_becomes_unknown_after_gap():
     assert c.duration(0.5) == 0.0
 
 
+# window ตัดข้อมูลเก่าออก และไม่นับช่วงที่ไม่รู้
 def test_time_window_clips_and_skips_unknown():
     w = TimeWindow(10.0)
     w.add(0.0, 4.0, True)
@@ -38,6 +43,7 @@ def test_time_window_clips_and_skips_unknown():
     assert w.totals(12.0) == pytest.approx((2.0, 8.0))  # window [2, 12]
 
 
+# นับ event ใน window เวลา (เช่น จำนวนหาว)
 def test_event_times_window():
     e = EventTimes(5.0)
     for t in (0.0, 3.0, 6.0):

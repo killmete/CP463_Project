@@ -40,6 +40,7 @@ from eval.extract import feature_path
 from eval.metrics import ClipScore, Summary, calm_clip, negative_clip, score_clip, summarize
 
 log = logging.getLogger("eval.tune")
+# ที่เก็บผล และกติกากัน false alarm: แต่ละกลุ่มห้ามเตือนผิดเพิ่มเกิน 1 ครั้ง/ชม. จากค่าเริ่มต้น
 REPORTS = Path(__file__).resolve().parent / "reports"
 
 FALSE_ALARM_SLACK_PER_H = 1.0  # allowed rise in alert episodes per hour over the defaults
@@ -47,6 +48,7 @@ GUARD_DROP = 0.02  # a guarded metric may not fall more than this below the grou
 _RATES = ("false_alarms_per_h", "distraction_per_h")
 
 
+# กลุ่มของค่าที่ปรับพร้อมกัน: grid ของค่าที่ลอง, ชุดข้อมูล, เป้าหมาย (objective), metric ที่ห้ามแย่ลง
 @dataclass(frozen=True)
 class Group:
     name: str
@@ -58,11 +60,13 @@ class Group:
     guards: tuple[str, ...] = ()  # Summary keys that must not get worse (see GUARD_DROP)
 
 
+# ค่าเฉลี่ยที่ข้าม NaN
 def _mean(*values: float) -> float:
     finite = [v for v in values if v == v]  # drop NaN
     return sum(finite) / len(finite) if finite else float("nan")
 
 
+# กลุ่มที่ tune ตามลำดับ (ตาก่อน เพราะพยักหน้าและ PERCLOS ขึ้นกับค่าตา)
 GROUPS = (
     Group(
         "eyes",
@@ -116,6 +120,7 @@ GROUPS = (
 )
 
 
+# แปลง key แบบมีจุดเป็น dict ซ้อน เพื่อส่งเป็น overrides ให้ load_config
 def nest(flat: dict[str, float]) -> dict:
     """{'yawn.mar_threshold': 0.3} -> {'yawn': {'mar_threshold': 0.3}} (load_config overrides)."""
     out: dict = {}
@@ -125,6 +130,7 @@ def nest(flat: dict[str, float]) -> dict:
     return out
 
 
+# งานของ process ลูก: 1 คลิป x ทุกจุดใน grid (โหลด features ครั้งเดียว)
 def score_grid(job: tuple[Clip, Path, list[dict[str, float]]]) -> list[ClipScore] | str:
     """Score one clip under every grid point (features loaded once). Errors are returned
     as a message, so one bad file cannot stop a long run."""
@@ -139,6 +145,7 @@ def score_grid(job: tuple[Clip, Path, list[dict[str, float]]]) -> list[ClipScore
         return f"{clip.dataset}/{clip.clip_id}: {type(exc).__name__}: {exc}"
 
 
+# กระจายงานทุกคลิปให้หลาย process แล้วจัดผลตามจุดใน grid
 def score_points(points, clips, pool) -> tuple[list[list[ClipScore]], list[str]]:
     per_point: list[list[ClipScore]] = [[] for _ in points]
     errors: list[str] = []
@@ -152,10 +159,12 @@ def score_points(points, clips, pool) -> tuple[list[list[ClipScore]], list[str]]
     return per_point, errors
 
 
+# คลิป guard: คลิปไม่ง่วง/สงบ ใช้ตรวจว่าค่าใหม่ไม่ทำให้เตือนผิดมากขึ้น
 def guard_clips(tune: list[tuple[Clip, Path]]) -> list[tuple[Clip, Path]]:
     return [(c, p) for c, p in tune if negative_clip(c) or calm_clip(c)]
 
 
+# ลองทุกจุดใน grid ของ 1 กลุ่ม แล้วเลือกจุดที่ objective ดีที่สุดและผ่านเงื่อนไขกัน false alarm
 def run_group(
     group: Group,
     base: dict[str, float],
@@ -195,8 +204,10 @@ def run_group(
                 "summary": _plain(own),
             }
         )
+    # start = จุดที่เท่ากับค่าปัจจุบัน (ใช้เทียบว่า guard แย่ลงไหม)
     start = next((r for r in rows if all(r["params"][k] == base[k] for k in keys)), None)
 
+    # ผ่านไหม: อัตราเตือนผิดไม่เกินเพดาน และ metric ที่ guard ไม่ลดลงเกิน GUARD_DROP
     def ok(row) -> bool:
         within = all(not row[rate] > limits[rate] for rate in _RATES)  # NaN rate: no data
         kept = start is None or all(
@@ -204,11 +215,13 @@ def run_group(
         )
         return within and kept
 
+    # จัดอันดับ: objective สูงสุด; ถ้าเท่ากันเลือกค่าที่ใกล้ค่าเดิม
     def rank(row):  # best objective; on a tie keep the value closest to the current one
         obj = row["objective"]
         drift = sum(abs(row["params"][k] - base[k]) / max(abs(base[k]), 1e-9) for k in keys)
         return (round(obj, 3) if obj == obj else float("-inf"), -drift)
 
+    # ถ้าไม่มีจุดไหนผ่าน ใช้ค่าเดิม
     eligible = [r for r in rows if ok(r)] or ([start] if start else [])
     if not eligible:
         raise ValueError(f"{group.name}: no grid point is within the caps and none is the start")
@@ -219,6 +232,7 @@ def run_group(
     return max(eligible, key=rank)["params"], rows
 
 
+# Summary -> dict สำหรับเขียน JSON
 def _plain(summary: Summary) -> dict:
     return {
         "clips": summary.clips,
@@ -234,6 +248,7 @@ def _plain(summary: Summary) -> dict:
     }
 
 
+# ค่าปัจจุบันใน default_config.yaml ของทุก key ที่ tune
 def defaults() -> dict[str, float]:
     from drowsiness.config import load_config
 
@@ -245,6 +260,9 @@ def defaults() -> dict[str, float]:
     }
 
 
+# python -m eval.tune: ใช้เฉพาะคลิป tune (ไม่แตะ test) -> tune ทีละกลุ่ม
+# -> เขียน tuning.json + proposed_config.yaml
+# ไม่แก้ default_config.yaml เอง คนต้องอ่าน report แล้วคัดลอกค่าเอง
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--data", type=Path, default=Path("data"))

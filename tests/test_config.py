@@ -1,3 +1,4 @@
+# เทสต์การโหลดและตรวจ config
 from pathlib import Path
 
 import pytest
@@ -5,6 +6,7 @@ import pytest
 from drowsiness.config import ConfigError, load_config
 
 
+# ค่าเริ่มต้นโหลดได้
 def test_defaults_load():
     cfg = load_config()
     assert cfg.capture.source == 0
@@ -12,6 +14,7 @@ def test_defaults_load():
     assert cfg.runtime.max_frames is None
 
 
+# ค่าเริ่มต้นตรงกับที่ literature review เลือก
 def test_defaults_match_literature_review():
     cfg = load_config()
     assert cfg.eyes.microsleep_s == 1.5
@@ -23,12 +26,14 @@ def test_defaults_match_literature_review():
     assert cfg.distraction.short_window_s == 30.0
 
 
+# ช่อง float รับ int ได้
 def test_ints_are_accepted_for_floats():
     cfg = load_config(overrides={"capture": {"fps": 25}})
     assert cfg.capture.fps == 25.0
     assert isinstance(cfg.capture.fps, float)
 
 
+# ไฟล์ผู้ใช้รวมแบบซ้อนชั้น (เขียนแค่ key ที่เปลี่ยน)
 def test_user_file_is_deep_merged(tmp_path: Path):
     user = tmp_path / "user.yaml"
     user.write_text("capture:\n  width: 1280\nyawn:\n  warning_count: 5\n", encoding="utf-8")
@@ -38,6 +43,7 @@ def test_user_file_is_deep_merged(tmp_path: Path):
     assert cfg.yawn.warning_count == 5
 
 
+# ค่าจาก flag ทับค่าจากไฟล์
 def test_overrides_win_over_file(tmp_path: Path):
     user = tmp_path / "user.yaml"
     user.write_text("capture:\n  source: 1\n", encoding="utf-8")
@@ -45,6 +51,7 @@ def test_overrides_win_over_file(tmp_path: Path):
     assert cfg.capture.source == "clip.mp4"
 
 
+# config ผิดแต่ละแบบ -> ConfigError
 @pytest.mark.parametrize(
     "overrides, message",
     [
@@ -89,10 +96,12 @@ def test_invalid_config_raises(overrides, message):
         load_config(overrides=overrides)
 
 
+# กล้องเลข 0 ใช้ได้
 def test_camera_index_zero_is_valid():
     assert load_config(overrides={"capture": {"source": 0}}).capture.source == 0
 
 
+# ไฟล์ config ไม่มี -> error
 def test_missing_file_raises(tmp_path: Path):
     with pytest.raises(ConfigError, match="not found"):
         load_config(tmp_path / "nope.yaml")

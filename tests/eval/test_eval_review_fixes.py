@@ -1,3 +1,4 @@
+# เทสต์จากการรีวิวโค้ด M5: นิยามของ metric และกติกาการ tune
 """Regression tests for the milestone-5 code review (metric definitions and tuning rules)."""
 
 from __future__ import annotations
@@ -50,6 +51,7 @@ def _s(seconds: float) -> int:
 # -- alert counting ----------------------------------------------------------------------
 
 
+# หลับตานาน 1 ครั้ง (warning -> alarm) นับเป็นการเตือน 1 ครั้ง
 def test_one_long_closure_is_one_alert_episode(tmp_path):
     n = _s(150)
     ear = np.full(n, 0.3)
@@ -59,6 +61,7 @@ def test_one_long_closure_is_one_alert_episode(tmp_path):
     assert s.drowsy_alerts == 1
 
 
+# การเตือนที่ห่างกันน้อยกว่า rearm_s นับเป็นครั้งเดียว
 def test_episodes_join_short_gaps():
     t = np.arange(10) / 1.0
     flag = np.array([1, 1, 0, 1, 0, 0, 0, 0, 1, 0], dtype=bool)
@@ -67,6 +70,7 @@ def test_episodes_join_short_gaps():
     assert episodes(np.zeros(5, dtype=bool), t[:5], 1.0) == 0
 
 
+# PERCLOS เตือนตอนสถานะง่วงอยู่แล้ว ก็ยังนับ
 def test_perclos_alert_seen_while_already_drowsy(tmp_path):
     # Repeated 2 s closures every 8 s: microsleep keeps the state at DROWSY_WARNING (or
     # higher), so a PERCLOS warning never shows up as a state-change event of its own.
@@ -83,6 +87,7 @@ def test_perclos_alert_seen_while_already_drowsy(tmp_path):
 # -- answer keys must not depend on the tuned value -------------------------------------
 
 
+# นิยาม event พยักหน้าไม่เปลี่ยนตามค่าที่ tune (คำตอบต้องคงที่)
 def test_nod_events_do_not_depend_on_tuned_min_duration(tmp_path):
     n = _s(60)
     pitch = np.zeros(n)
@@ -104,6 +109,7 @@ def test_nod_events_do_not_depend_on_tuned_min_duration(tmp_path):
     assert counts == {0.5: 2, 1.5: 2}  # the 0.6 s nod is never an event; the others always are
 
 
+# การตรวจพบในช่วงที่ไม่มี label ไม่นับเป็น false
 def test_false_events_outside_labelled_span_are_not_counted(tmp_path):
     cfg = load_config(overrides={"yawn": {"mar_threshold": 0.4, "min_duration_s": 1.0}})
     n = _s(60)
@@ -114,6 +120,7 @@ def test_false_events_outside_labelled_span_are_not_counted(tmp_path):
     assert s.yawns_detected == 1 and s.yawn_fp == 0
 
 
+# หลับตา 2 ครั้งที่มีตาเปิดคั่น ไม่รวมเป็นครั้งเดียว
 def test_closure_events_are_not_joined_across_an_opening(tmp_path):
     n = _s(40)
     ear = np.full(n, 0.3)
@@ -130,6 +137,7 @@ def test_closure_events_are_not_joined_across_an_opening(tmp_path):
 # -- labels -----------------------------------------------------------------------------
 
 
+# DMD: เฟรมที่ไม่ระบุหรือกำลังเปลี่ยน ไม่นับคะแนน
 def test_dmd_undefined_and_transition_frames_are_not_scored(tmp_path):
     actions = {
         "0": ("eyes_state/open", 0, 3),
@@ -153,6 +161,7 @@ def test_dmd_undefined_and_transition_frames_are_not_scored(tmp_path):
     assert np.flatnonzero(truth.tracks["eyes_closed"]).tolist() == [5, 6]
 
 
+# ธงเงื่อนไขรวมเฟรมแรกของแต่ละช่วงด้วย
 def test_condition_flags_include_the_first_frame_of_each_run():
     t = np.arange(10) / 10.0
     duration = np.array([0, 0, 0, 0.1, 0.2, 0, 0, 0, 0.1, 0])  # runs start at frames 2 and 7
@@ -161,6 +170,7 @@ def test_condition_flags_include_the_first_frame_of_each_run():
     assert np.flatnonzero(flag).tolist() == [2, 3, 4, 7, 8]
 
 
+# DMD: คนเดียวกันไม่อยู่ทั้ง tune และ test (กัน data leakage)
 def test_dmd_catalog_subjects_never_in_both_splits(tmp_path):
     for subject in ("1", "2", "5", "9", "10", "14"):
         folder = tmp_path / "dmd" / "gA" / subject / "s1"
@@ -178,11 +188,13 @@ def test_dmd_catalog_subjects_never_in_both_splits(tmp_path):
 # -- tuning rules -----------------------------------------------------------------------
 
 
+# pool ปลอมที่รันในตัว (ไม่สร้าง process) ให้เทสต์เร็ว
 class _InlinePool:
     def imap_unordered(self, fn, jobs):
         return map(fn, jobs)
 
 
+# tune: จุดที่เตือนผิดเกินเพดานถูกตัด และคะแนนเท่ากันเลือกค่าเดิม
 def test_run_group_caps_alert_rates_and_prefers_the_start_on_ties(tmp_path, monkeypatch):
     # A fake scorer: objective rises with x, alert rate jumps above the cap at x = 3.
     import eval.tune as tune
@@ -213,6 +225,7 @@ def test_run_group_caps_alert_rates_and_prefers_the_start_on_ties(tmp_path, monk
     assert [r["eligible"] for r in rows] == [True, True, True, False, False]
 
 
+# tune: metric ที่ guard ห้ามแย่ลง
 def test_run_group_guard_blocks_a_worse_guarded_metric(monkeypatch):
     import eval.tune as tune
 
@@ -238,11 +251,13 @@ def test_run_group_guard_blocks_a_worse_guarded_metric(monkeypatch):
     assert best == {"g.x": 0.0}  # higher objective, but recall would drop by 0.1 / 0.2
 
 
+# objective เป็น NaN อยู่ท้ายสุด
 def test_summary_nan_objective_ranks_last():
     assert np.isnan(summarize([]).get("events.nod.f1"))
     assert summarize([]).false_alarms_per_h != pytest.approx(0.0)  # NaN, not zero
 
 
+# objective ใช้เฉพาะชุดข้อมูลของกลุ่ม ไม่รวมคลิป guard จากชุดอื่น
 def test_run_group_objective_ignores_guard_clips_from_other_datasets(monkeypatch):
     # Guard clips (here NTHU) count for alert rates but not for a DMD-only objective.
     import eval.tune as tune
@@ -276,6 +291,7 @@ def test_run_group_objective_ignores_guard_clips_from_other_datasets(monkeypatch
     assert [r["objective"] for r in rows] == [1.0, 2.0]
 
 
+# ตารางผลหลักที่กรองชุดข้อมูล ใช้แค่ชุดนั้น
 def test_headline_dataset_filter_uses_only_that_dataset(monkeypatch):
     import eval.report as report
 

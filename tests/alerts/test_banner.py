@@ -1,3 +1,4 @@
+# เทสต์ banner สำหรับคนขับ: วาดได้ทุกสถานะ, อยู่ในภาพ, ALARM กระพริบ
 """Driver-facing banner: drawn for every state, fits the frame, flashes for ALARM."""
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ def make(level=AlertLevel.WARNING, message="Look at the road", flash=False, toas
     return AlertDecision(0.0, state, level, None, message, flash, SoundCue.NONE, toast=toast)
 
 
+# ทุกข้อความวาดอยู่ในกรอบ banner
 @pytest.mark.parametrize("message", [*MESSAGES.values(), ESCALATED])
 @pytest.mark.parametrize("level", list(AlertLevel))
 def test_every_message_draws_inside_the_banner(level, message):
@@ -35,6 +37,7 @@ def test_every_message_draws_inside_the_banner(level, message):
     assert cols.size and cols.min() > 0 and cols.max() < 640 - 21
 
 
+# สถานะปกติแสดงแค่ป้ายเล็กๆ
 def test_normal_shows_only_a_small_monitoring_tag():
     image = blank()
     draw_banner(image, make(AlertLevel.INFO, None), 0.0, 2.0)
@@ -42,6 +45,7 @@ def test_normal_shows_only_a_small_monitoring_tag():
     assert ys.min() > 440 and xs.min() > 500  # bottom-right corner only
 
 
+# WARNING และ ALARM มีกรอบสี
 def test_warning_and_alarm_draw_a_border():
     image = blank()
     draw_banner(image, make(AlertLevel.WARNING), 0.0, 2.0)
@@ -51,6 +55,7 @@ def test_warning_and_alarm_draw_a_border():
     assert not info[0, 320].any()
 
 
+# ALARM กระพริบตามเวลาของเฟรม (deterministic)
 def test_alarm_flashes_from_the_timestamp():
     on, off = blank(), blank()
     draw_banner(on, make(AlertLevel.ALARM, "WAKE UP", flash=True), 0.0, 2.0)
@@ -58,6 +63,7 @@ def test_alarm_flashes_from_the_timestamp():
     assert on[475, 5, 2] > off[475, 5, 2] > 0
 
 
+# ALARM จากการยกระดับไม่กระพริบ
 def test_escalated_alarm_is_steady():
     a, b = blank(), blank()
     draw_banner(a, make(AlertLevel.ALARM, ESCALATED, flash=False), 0.0, 2.0)
@@ -65,12 +71,14 @@ def test_escalated_alarm_is_steady():
     assert np.array_equal(a, b)
 
 
+# toast วาดใต้แผง debug
 def test_toast_is_drawn_below_the_debug_panels():
     image = blank()
     draw_banner(image, make(AlertLevel.INFO, None, toast="Calibrated - monitoring"), 0.0, 2.0)
     assert image[100:140].any() and not image[:100].any()
 
 
+# ภาพเล็กก็ยังวาดได้
 def test_small_frames_still_work():
     image = blank(120, 160)
     draw_banner(image, make(AlertLevel.ALARM, MESSAGES["perclos_alarm"], flash=True), 0.0, 2.0)

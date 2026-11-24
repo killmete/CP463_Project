@@ -1,3 +1,4 @@
+# เทสต์ eval pipeline ด้วยข้อมูลปลอม (ไม่ต้องมีชุดข้อมูล โมเดล หรือวิดีโอจริง)
 """Evaluation pipeline on synthetic data: no datasets, no model, no video decoding."""
 
 from __future__ import annotations
@@ -44,6 +45,7 @@ def _arrays(n: int, *, ear=0.3, mar=0.02, pitch=0.0, yaw=0.0) -> dict[str, np.nd
 # -- catalog -----------------------------------------------------------------------------
 
 
+# NTHU: รหัสคลิป การแบ่ง tune/test และไฟล์ label ถูกต้อง
 def test_nthu_catalog_ids_split_and_labels(tmp_path):
     train = tmp_path / "nthu-ddd/Training_Evaluation_Dataset/Training Dataset/001/night_noglasses"
     _touch(train / "yawning.avi")
@@ -64,6 +66,7 @@ def test_nthu_catalog_ids_split_and_labels(tmp_path):
     assert te.split == "test" and te.labels["drowsiness"].parent.name == "noglasses"
 
 
+# YawDD: แยกชื่อไฟล์ได้ และแบ่งตามคน
 def test_yawdd_names_and_subject_split(tmp_path):
     for name in (
         "1-FemaleNoGlasses-Normal.avi",
@@ -84,6 +87,7 @@ def test_yawdd_names_and_subject_split(tmp_path):
     assert {c.split for c in clips.values()} == {"tune", "test"}
 
 
+# UTA: fold 1 เป็น test
 def test_uta_fold_one_is_test(tmp_path):
     _touch(tmp_path / "uta-rldd/01/10.mov")  # <root>/uta-rldd/<subject>/<0|5|10>.<ext>
     _touch(tmp_path / "uta-rldd/13/0.mp4")
@@ -94,6 +98,7 @@ def test_uta_fold_one_is_test(tmp_path):
 # -- labels ------------------------------------------------------------------------------
 
 
+# NTHU: อ่าน label ตัวเลข; ไฟล์สั้นกว่าวิดีโอ ส่วนที่เหลือไม่นับ
 def test_nthu_digit_labels_and_short_files(tmp_path):
     clip = Clip(
         "nthu",
@@ -113,6 +118,7 @@ def test_nthu_digit_labels_and_short_files(tmp_path):
     assert not truth.has("nod")
 
 
+# DMD: ช่วงเฟรมรวม frame_end และนับเฉพาะเฟรมที่มี label
 def test_dmd_intervals_inclusive_and_family_coverage(tmp_path):
     ann = {
         "openlabel": {
@@ -137,6 +143,7 @@ def test_dmd_intervals_inclusive_and_family_coverage(tmp_path):
     assert not truth.has("yawn")  # yawning family not annotated in this file
 
 
+# ช่วงที่ห่างกันน้อยกว่า merge_gap รวมเป็นช่วงเดียว
 def test_intervals_merge_gap():
     track = np.array([0, 1, 1, 0, 1, 0, 0, 0, 1], dtype=bool)
     assert intervals(track, 1.0) == [(1, 3), (4, 5), (8, 9)]
@@ -146,6 +153,7 @@ def test_intervals_merge_gap():
 # -- metrics -----------------------------------------------------------------------------
 
 
+# สูตร precision/recall/F1 และ AUC
 def test_prf_and_auc():
     assert prf((8, 2, 2)) == pytest.approx(
         {"precision": 0.8, "recall": 0.8, "f1": 0.8, "support": 10}
@@ -161,6 +169,7 @@ def _nthu_clip(tmp_path, kind, labels: dict[str, str]) -> Clip:
     return Clip("nthu", "c", "001", Path("v.avi"), "tune", kind=kind, labels=files)
 
 
+# หลับตานานหลัง calibrate ถูกนับว่าจับได้
 def test_score_clip_catches_long_closure_after_calibration(tmp_path):
     cfg = load_config()
     n = int(40 * FPS)
@@ -180,6 +189,7 @@ def test_score_clip_catches_long_closure_after_calibration(tmp_path):
     assert s.drowsy_alerts >= 1 and s.event_fp["closure"] == 0
 
 
+# จับคู่หาวกับ label และนับหาวที่ผิด
 def test_score_clip_yawn_matching_and_false_yawns(tmp_path):
     cfg = load_config(overrides={"yawn": {"mar_threshold": 0.4, "min_duration_s": 1.0}})
     n = int(60 * FPS)
@@ -199,6 +209,7 @@ def test_score_clip_yawn_matching_and_false_yawns(tmp_path):
     assert summary.events["yawn"]["precision"] == pytest.approx(2 / 3)
 
 
+# false alarm นับเฉพาะคลิปที่ไม่ง่วง
 def test_false_alarms_counted_only_on_non_drowsy_clips(tmp_path):
     cfg = load_config()
     n = int(40 * FPS)
@@ -216,6 +227,7 @@ def test_false_alarms_counted_only_on_non_drowsy_clips(tmp_path):
     assert summary.get("events.nod.f1") != summary.get("events.nod.f1")  # NaN: no labels
 
 
+# cache .npz อ่านกลับได้ค่าเดิม
 def test_feature_cache_round_trip(tmp_path):
     csv = tmp_path / "c.csv"
     csv.write_text(
@@ -234,6 +246,7 @@ def test_feature_cache_round_trip(tmp_path):
 # -- tuning ------------------------------------------------------------------------------
 
 
+# key ใน grid ของ tune มีอยู่จริงใน config
 def test_tuning_grid_keys_are_real_config_values():
     cfg = load_config()
     for group in GROUPS:

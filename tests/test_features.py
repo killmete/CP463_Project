@@ -1,3 +1,4 @@
+# เทสต์สูตร EAR, MAR, head pose ด้วย landmark ปลอมที่รู้คำตอบ
 """Feature formulas on synthetic landmark geometry with known answers."""
 
 import math
@@ -35,11 +36,13 @@ def face_points(right_height=9.0, left_height=9.0):
     return points
 
 
+# EAR ของรูปตาที่รู้คำตอบ
 def test_ear_of_known_geometry():
     assert F.ear_right(face_points()) == pytest.approx(9 / 30)
     assert F.ear_left(face_points(left_height=6)) == pytest.approx(6 / 30)
 
 
+# EAR ตรงกับตัวอย่างในตำรา
 def test_ear_textbook_example():
     points = np.zeros((NUM_LANDMARKS, 3))
     p1, p2, p3, p4, p5, p6 = RIGHT_EYE
@@ -47,25 +50,30 @@ def test_ear_textbook_example():
     assert F.ear_right(points) == pytest.approx((2 + 2) / (2 * 4))
 
 
+# ตาปิด EAR = 0
 def test_closed_eye_gives_zero_ear():
     assert F.ear_right(face_points(right_height=0)) == pytest.approx(0.0)
 
 
+# ตาที่ผิดรูป (กว้าง 0) -> None
 def test_degenerate_eye_gives_none():
     assert F.ear_right(np.zeros((NUM_LANDMARKS, 3))) is None
 
 
+# EAR ไม่เปลี่ยนตามขนาดหน้า (ใกล้/ไกลกล้อง)
 def test_ear_is_scale_invariant():
     points = face_points()
     assert F.ear_left(points * 3.7) == pytest.approx(F.ear_left(points))
 
 
+# ปิดตาข้างเดียว EAR เปลี่ยนแค่ข้างนั้น
 def test_only_the_closed_eye_changes():
     points = face_points(left_height=0.0)  # driver's left eye closed
     assert F.ear_left(points) == pytest.approx(0.0)
     assert F.ear_right(points) == pytest.approx(9 / 30)
 
 
+# เลข landmark ของตาไม่ซ้ำและอยู่ในช่วง 0-477
 def test_eye_index_sets_are_distinct_and_in_range():
     assert not set(LEFT_EYE) & set(RIGHT_EYE)
     assert all(0 <= i < NUM_LANDMARKS for i in LEFT_EYE + RIGHT_EYE)
@@ -82,19 +90,23 @@ def mouth_points(gaps, width=40.0):
     return points
 
 
+# MAR ของรูปปากที่รู้คำตอบ
 def test_mar_of_known_geometry():
     assert F.mouth_aspect_ratio(mouth_points((8, 16, 24))) == pytest.approx(16 / 40)
 
 
+# ปากปิด MAR = 0
 def test_closed_mouth_gives_zero_mar():
     assert F.mouth_aspect_ratio(mouth_points((0, 0, 0))) == pytest.approx(0.0)
 
 
+# MAR ไม่เปลี่ยนตามขนาดหน้า
 def test_mar_is_scale_invariant():
     points = mouth_points((8, 16, 24))
     assert F.mouth_aspect_ratio(points * 0.25) == pytest.approx(0.4)
 
 
+# ปากที่ผิดรูป -> None
 def test_degenerate_mouth_gives_none():
     assert F.mouth_aspect_ratio(np.zeros((NUM_LANDMARKS, 3))) is None
 
@@ -117,6 +129,7 @@ def projected_face(pitch, yaw, roll, distance_mm=1500.0):
     return points
 
 
+# head pose หามุมที่ตั้งไว้ได้ถูก
 @pytest.mark.parametrize(
     "angles",
     [(0, 0, 0), (20, 0, 0), (-20, 0, 0), (0, 30, 0), (0, -30, 0), (0, 0, 15), (0, 0, -15),
@@ -128,6 +141,7 @@ def test_head_pose_recovers_known_angles(angles):
     assert pose == pytest.approx(angles, abs=1.0)
 
 
+# แปลงมุม -> rotation -> มุม ได้ค่าเดิม
 def test_rotation_angle_round_trip():
     angles = (12.0, -33.0, 7.5)
     assert F.rotation_to_angles(F.angles_to_rotation(*angles)) == pytest.approx(angles)
@@ -140,6 +154,7 @@ def _nose_offset(points):
     return nose - centre
 
 
+# เครื่องหมายมุมตรงกับที่ตกลงใน contract (pitch บวก = เงยหัว, yaw บวก = หันซ้ายของคนขับ)
 def test_pose_signs_match_the_contract():
     # Contract (types.py): pitch + = head up, yaw + = driver's left (= image right
     # in an unmirrored front camera), roll + = toward the driver's left shoulder.

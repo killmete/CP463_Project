@@ -1,3 +1,4 @@
+# เทสต์ state machine และ calibration: ลำดับสถานะ, hysteresis, event เฉพาะตอนเปลี่ยน
 import pytest
 from builders import Seq, config, events, run
 
@@ -6,6 +7,7 @@ from drowsiness.logic.state_machine import StateMachine
 from drowsiness.types import AlertLevel, DriverState, FrameFeatures
 
 
+# เริ่มที่ CALIBRATING แล้วเป็น NORMAL เมื่อ calibrate เสร็จ
 def test_calibration_then_normal():
     outs = run(Seq().calibrate().open(1).frames)
     assert outs[0].state == DriverState.CALIBRATING
@@ -16,12 +18,14 @@ def test_calibration_then_normal():
     assert outs[-1].state == DriverState.NORMAL
 
 
+# event เกิดเฉพาะตอนสถานะเปลี่ยน ไม่ใช่ทุกเฟรม
 def test_events_only_on_transitions():
     outs = run(Seq().calibrate().closed(2.5).frames)
     assert [e.reason for e in events(outs)] == ["calibrated", "microsleep"]
     assert sum(1 for o in outs if o.events) == 2
 
 
+# สถานะรุนแรงขึ้นทันทีและ event มีรายละเอียด
 def test_escalation_is_immediate_and_carries_details():
     outs = run(Seq().calibrate().closed(3.5).frames)
     microsleep, sleep = events(outs)[1:]
@@ -31,6 +35,7 @@ def test_escalation_is_immediate_and_carries_details():
     assert sleep.details["reasons"] == "sleep,microsleep"
 
 
+# ลดสถานะได้ต่อเมื่อปลอดภัยต่อเนื่อง clear_s
 @pytest.mark.parametrize("open_s, cleared", [(0.9, False), (1.1, True)])
 def test_hysteresis_before_clearing(open_s, cleared):
     outs = run(Seq().calibrate().closed(1.8).open(open_s).frames)
@@ -38,6 +43,7 @@ def test_hysteresis_before_clearing(open_s, cleared):
     assert ("cleared" in [e.reason for e in events(outs)]) is cleared
 
 
+# เหตุผลที่เปิดปิดไปมา ไม่สร้าง event ถี่เกิน
 def test_flickering_reason_does_not_flood_events():
     machine = StateMachine(clear_s=1.0)
     machine.state = DriverState.NORMAL
@@ -50,6 +56,7 @@ def test_flickering_reason_does_not_flood_events():
     assert machine.state == DriverState.DROWSY_WARNING
 
 
+# ลำดับความสำคัญ: ALARM > ไม่เจอหน้า > เสียสมาธิ
 def test_priority_alarm_beats_no_face_beats_distraction():
     outs = run(Seq().calibrate().pose(3.5, yaw=45).no_face(2.5).frames)
     states = [e.state for e in events(outs)]
@@ -58,6 +65,7 @@ def test_priority_alarm_beats_no_face_beats_distraction():
     assert outs[-1].state == DriverState.DROWSY_ALARM
 
 
+# calibrate ไม่สำเร็จ ลองใหม่ แล้วใช้ค่า fallback
 def test_calibration_retries_then_falls_back():
     cfg = config(calibration={"max_attempts": 2})
     outs = run(Seq().closed(5.5).closed(5.5).open(2).frames, cfg)  # eyes closed twice
@@ -67,18 +75,21 @@ def test_calibration_retries_then_falls_back():
     assert outs[-1].state == DriverState.NORMAL
 
 
+# การลองใหม่สำเร็จได้
 def test_calibration_retry_can_succeed():
     outs = run(Seq().no_face(5.5).calibrate().open(1).frames)
     reasons = [e.reason for e in events(outs)]
     assert "calibrated" in reasons and "calibration_fallback" not in reasons
 
 
+# fallback ใช้ threshold EAR คงที่
 def test_fallback_uses_absolute_ear_threshold():
     cfg = config(calibration={"max_attempts": 1})
     outs = run(Seq().no_face(5.5).open(1).closed(1.8).frames, cfg)
     assert outs[-1].state == DriverState.DROWSY_WARNING
 
 
+# ระหว่าง calibrate ใหม่ (ปุ่ม c) ยังตรวจจับต่อด้วยค่าเดิม
 def test_recalibrate_keeps_detecting_until_the_new_baseline_is_ready():
     monitor = DriverMonitor(config())
     seq = Seq().calibrate().open(1)
@@ -95,6 +106,7 @@ def test_recalibrate_keeps_detecting_until_the_new_baseline_is_ready():
     assert outs[0].metrics["calibrating"] == 1.0 and "calibrating" not in outs[-1].metrics
 
 
+# calibrate ใหม่ตอน ALARM ไม่ทำให้เสียงเงียบ
 def test_recalibrate_during_an_alarm_does_not_silence_it():
     monitor = DriverMonitor(config(calibration={"max_attempts": 1}))
     seq = Seq().calibrate().closed(3.5)
@@ -109,6 +121,7 @@ def test_recalibrate_during_an_alarm_does_not_silence_it():
     assert monitor.calibration is not None and not monitor.calibration.fallback
 
 
+# calibrate เสร็จตอนไม่เจอหน้า ยังคงสถานะไม่เจอหน้า
 def test_calibration_finishing_during_no_face_keeps_no_face():
     cfg = config(calibration={"min_valid_frames_ratio": 0.5})
     outs = run(Seq().calibrate(2.8).no_face(4).open(3).frames, cfg)
@@ -118,6 +131,7 @@ def test_calibration_finishing_during_no_face_keeps_no_face():
     assert outs[-1].state == DriverState.NORMAL
 
 
+# fallback ยังใช้ท่าปกติที่วัดได้
 def test_fallback_keeps_a_valid_neutral_pose():
     # Eyes never open enough to calibrate EAR, but the head pose was measured fine.
     outs = run(Seq().closed(16).frames, config(calibration={"max_attempts": 3}))
@@ -126,6 +140,7 @@ def test_fallback_keeps_a_valid_neutral_pose():
     assert fallback.details["neutral_yaw"] == pytest.approx(3.0)
 
 
+# เวลาถอยหลัง -> ValueError
 def test_timestamps_must_increase():
     monitor = DriverMonitor(config())
     monitor.update(FrameFeatures(timestamp=1.0, face_found=False))
@@ -133,6 +148,7 @@ def test_timestamps_must_increase():
         monitor.update(FrameFeatures(timestamp=1.0, face_found=False))
 
 
+# logic ไม่แก้ข้อมูลที่ส่งเข้ามา
 def test_logic_is_pure():
     import ast
     from pathlib import Path

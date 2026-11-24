@@ -1,3 +1,4 @@
+# เทสต์ overlay สำหรับ debug
 import numpy as np
 import pytest
 
@@ -22,6 +23,7 @@ def face_output():
     return PerceptionOutput(features, landmarks, 7.0)
 
 
+# วาดลงบนภาพเดิม (ไม่สร้างภาพใหม่)
 @pytest.mark.parametrize(
     "out",
     [face_output(), PerceptionOutput(FrameFeatures(timestamp=0.0, face_found=False), None, 1.0)],
@@ -34,6 +36,7 @@ def test_draw_perception_draws_in_place(out):
     assert image.any()
 
 
+# ป้ายไม่เจอหน้าเป็นสีแดง
 def test_no_face_label_is_red():
     image = blank()
     out = PerceptionOutput(FrameFeatures(timestamp=0.0, face_found=False), None, 1.0)
@@ -42,6 +45,7 @@ def test_no_face_label_is_red():
     assert red[400:].any()
 
 
+# ปิด overlay ได้
 def test_overlay_can_be_turned_off():
     image = blank()
     flags = {"landmarks": False, "values": False, "logic": False}
@@ -50,6 +54,7 @@ def test_overlay_can_be_turned_off():
     assert not image.any()
 
 
+# latency เกินงบ ตัวเลขเป็นสีแดง
 def test_draw_status_turns_red_over_budget():
     ok, slow = blank(), blank()
     draw_status(ok, 30.0, 20.0, 50.0)
@@ -58,6 +63,7 @@ def test_draw_status_turns_red_over_budget():
     assert slow[:, :, 2].max() > 200
 
 
+# วาดได้ทุกสถานะ
 @pytest.mark.parametrize("state", list(DriverState))
 def test_draw_logic_for_every_state(state):
     image = blank()

@@ -14,11 +14,13 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 
+# ชุดข้อมูล 4 ชุดที่ใช้ประเมิน และนามสกุลวิดีโอที่รับ
 DATASETS = ("nthu", "dmd", "yawdd", "uta")  # extraction order: labelled per-frame data first
 VIDEO_EXTS = {".avi", ".mp4", ".mov", ".mkv"}
 
 
 @dataclass(frozen=True)
+# ข้อมูลของวิดีโอ 1 คลิป: ชุดข้อมูล, รหัส, คน, path, split (tune/test), เงื่อนไข, ประเภท, ไฟล์ label
 class Clip:
     dataset: str
     clip_id: str  # unique and filesystem-safe; the feature CSV is <dataset>/<clip_id>.csv
@@ -30,10 +32,12 @@ class Clip:
     labels: dict[str, Path] = field(default_factory=dict)  # label name -> file
 
 
+# ทำชื่อให้เทียบกันได้ (ตัวเล็ก ไม่มี _)
 def _norm(name: str) -> str:
     return name.lower().replace("_", "")
 
 
+# เลือกคนทุกคนที่ 3 เป็นชุด test (แบ่งตามคน ไม่ใช่ตามเฟรม กัน data leakage)
 def _every_third(subjects: list[str]) -> set[str]:
     """Deterministic held-out subjects: every third one, in the order given."""
     return set(list(subjects)[1::3])
@@ -42,8 +46,10 @@ def _every_third(subjects: list[str]) -> set[str]:
 # -- NTHU-DDD ------------------------------------------------------------------------
 
 
+# NTHU-DDD: ใช้การแบ่งของชุดข้อมูลเอง (training + evaluation = tune, testing = test)
 def nthu(root: Path) -> Iterator[Clip]:
     base = root / "nthu-ddd"
+    # ชุด training: label ต่อเฟรม 4 ไฟล์ (ง่วง, ตา, หัว, ปาก)
     train = base / "Training_Evaluation_Dataset" / "Training Dataset"
     for video in sorted(train.glob("*/*/*.avi")):
         subject, scenario, behaviour = video.parent.parent.name, video.parent.name, video.stem
@@ -62,6 +68,7 @@ def nthu(root: Path) -> Iterator[Clip]:
             {k: p for k, p in labels.items() if p.is_file()},
         )
 
+    # ชุด evaluation: วิดีโอผสม หา label ที่ชื่อ scenario ตรงกัน
     evaluation = base / "Training_Evaluation_Dataset" / "Evaluation Dataset"
     for video in sorted(evaluation.glob("*/*_mix.mp4")):
         subject, scenario = video.stem.split("_", 1)[0], video.stem.split("_", 1)[1][:-4]
@@ -81,6 +88,7 @@ def nthu(root: Path) -> Iterator[Clip]:
             labels,
         )
 
+    # ชุด testing: มีแค่ label ง่วง; ข้ามโฟลเดอร์ "wh" ที่เป็นสำเนาซ้ำ
     testing = base / "Testing_Dataset"
     label_files = sorted((testing / "test_label_txt").rglob("*_mixing_drowsiness.txt"))
     for video in sorted(testing.glob("*_mix.mp4")):
@@ -108,6 +116,7 @@ def nthu(root: Path) -> Iterator[Clip]:
 # -- DMD -----------------------------------------------------------------------------
 
 
+# DMD: วิดีโอกล้องหน้า + label JSON (ง่วง, เสียสมาธิ); คนทุกคนที่ 3 เป็น test
 def dmd(root: Path) -> Iterator[Clip]:
     base = root / "dmd"
     videos = sorted(base.glob("g*/*/s*/*_rgb_face.mp4"))
@@ -137,12 +146,14 @@ def dmd(root: Path) -> Iterator[Clip]:
 
 # -- YawDD ---------------------------------------------------------------------------
 
+# แยกชื่อไฟล์ YawDD: เลข-เพศ-แว่น-พฤติกรรม เช่น 12-MaleGlasses-Yawning.avi
 _YAWDD = re.compile(
     r"^(\d+)-(Female|Male)([A-Za-z]*?)(?:-(Normal|Talking|Yawning|Talking&Yawning))?(?:\.avi)?$",
     re.IGNORECASE,
 )
 
 
+# YawDD: label ระดับคลิป (ปกติ/คุย/หาว) จากชื่อไฟล์; กล้อง dash หรือ mirror
 def yawdd(root: Path) -> Iterator[Clip]:
     base = root / "yawdd"
     parsed = []
@@ -182,6 +193,7 @@ def yawdd(root: Path) -> Iterator[Clip]:
 # -- UTA-RLDD ------------------------------------------------------------------------
 
 
+# UTA-RLDD: 5 fold ละ 12 คน; fold 1 เป็น test; ชื่อไฟล์ 0/5/10 = ตื่น/เริ่มง่วง/ง่วง
 def uta(root: Path) -> Iterator[Clip]:
     base = root / "uta-rldd"
     for video in sorted(base.glob("*/*")):
@@ -200,8 +212,10 @@ def uta(root: Path) -> Iterator[Clip]:
         )
 
 
+# ชื่อชุดข้อมูล -> ฟังก์ชันที่ไล่หาคลิป
 SOURCES = {"nthu": nthu, "dmd": dmd, "yawdd": yawdd, "uta": uta}
 
 
+# รวมคลิปทั้งหมดของชุดข้อมูลที่เลือก
 def catalog(root: Path, datasets: tuple[str, ...] = DATASETS) -> list[Clip]:
     return [clip for name in datasets for clip in SOURCES[name](root)]

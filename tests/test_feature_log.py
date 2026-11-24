@@ -1,3 +1,4 @@
+# เทสต์การเขียน/อ่าน CSV ของ features
 import csv
 
 import pytest
@@ -11,6 +12,7 @@ from drowsiness.feature_log import (
 from drowsiness.types import FrameFeatures, PerceptionOutput
 
 
+# รายชื่อ blendshape ครบ 52 และไม่ซ้ำ
 def test_blendshape_list_is_complete_and_unique():
     assert len(BLENDSHAPE_NAMES) == 52 == len(set(BLENDSHAPE_NAMES))
 
@@ -31,6 +33,7 @@ FEATURES = [
 ]
 
 
+# เขียนแล้วอ่านกลับได้ค่าเดิมทุกหลัก
 def test_round_trip_is_exact(tmp_path):
     path = tmp_path / "features.csv"
     with FeatureCsvWriter(path) as writer:
@@ -39,6 +42,7 @@ def test_round_trip_is_exact(tmp_path):
     assert read_feature_csv(path) == FEATURES
 
 
+# หัวตารางและรูปแบบช่องถูกต้อง
 def test_header_and_cells(tmp_path):
     path = tmp_path / "features.csv"
     with FeatureCsvWriter(path, blendshapes=False) as writer:
@@ -52,6 +56,7 @@ def test_header_and_cells(tmp_path):
     assert read_feature_csv(path)[0].blendshapes is None
 
 
+# CSV รูปแบบอื่นถูกปฏิเสธ
 def test_reader_rejects_other_csvs(tmp_path):
     path = tmp_path / "other.csv"
     path.write_text("a,b\n1,2\n", encoding="utf-8")
@@ -59,6 +64,7 @@ def test_reader_rejects_other_csvs(tmp_path):
         read_feature_csv(path)
 
 
+# write ก่อน open -> error
 def test_write_before_open_raises(tmp_path):
     with pytest.raises(RuntimeError):
         FeatureCsvWriter(tmp_path / "x.csv").write(PerceptionOutput(FEATURES[0], None, 0.0), 0)

@@ -27,6 +27,7 @@ from eval.metrics import ClipScore, Summary, summarize
 from eval.tune import FALSE_ALARM_SLACK_PER_H, GUARD_DROP, REPORTS, defaults, score_grid
 
 log = logging.getLogger("eval.report")
+# config ที่เทียบกัน, สีของกราฟ, ชื่อชุดข้อมูลที่แสดง
 CONFIGS = ("default", "proposed")
 # sequential blue ramp, light -> dark (validated reference palette)
 _BLUES = ["#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95", "#0d366b"]
@@ -34,10 +35,12 @@ _INK, _INK2, _GRID = "#0b0b0b", "#52514e", "#e4e3df"
 _NAMES = {"nthu": "NTHU-DDD", "dmd": "DMD", "yawdd": "YawDD", "uta": "UTA-RLDD"}
 
 
+# dict ซ้อน -> key แบบมีจุด (กลับด้านของ nest ใน tune)
 def flatten(nested: dict) -> dict[str, float]:
     return {f"{sec}.{k}": float(v) for sec, vals in (nested or {}).items() for k, v in vals.items()}
 
 
+# จัดรูปตัวเลขในตาราง (NaN -> –)
 def _f(x: float, pct: bool = False) -> str:
     if x is None or x != x:
         return "–"
@@ -46,6 +49,7 @@ def _f(x: float, pct: bool = False) -> str:
 
 # -- tables ----------------------------------------------------------------------------
 
+# แถวของตารางผลหลัก: ชื่อแถว, key ใน Summary, แสดงเป็น % ไหม
 HEADLINE = (  # (row label, Summary key, as percent[, only this dataset])
     # NTHU's eye label marks drooping eyes, not closed ones (see eval/README.md)
     ("Eyes closed, frame F1 (DMD)", "frame.eyes_closed.f1", False, "dmd"),
@@ -66,6 +70,7 @@ HEADLINE = (  # (row label, Summary key, as percent[, only this dataset])
 )
 
 
+# ตารางผลหลัก: default vs proposed บน tune และ test (ตัวเลข test คือตัวที่เชื่อได้)
 def headline_table(scores: dict[str, list[ClipScore]]) -> str:
     cache: dict[tuple[str, str, str | None], Summary] = {}
 
@@ -93,12 +98,14 @@ def headline_table(scores: dict[str, list[ClipScore]]) -> str:
     return "\n".join(lines)
 
 
+# คลิปที่ถอดรหัสได้ไม่ครบ (เฟรมน้อยกว่า header)
 def _short(s: ClipScore) -> bool:
     """Fewer feature rows than the video header promises (a decode that stopped early)."""
     expected = video_frame_count(s.clip.video)
     return expected > 0 and s.n_frames < 0.98 * expected
 
 
+# ตารางความครอบคลุม: จำนวนคลิป ชั่วโมง เฟรมที่เจอหน้า ต่อชุดข้อมูล
 def coverage_table(scores: list[ClipScore], manifest: dict[str, dict]) -> str:
     lines = [
         "| Dataset | Split | Clips | Hours | Face found | Calibration fallback | "
@@ -125,6 +132,7 @@ def coverage_table(scores: list[ClipScore], manifest: dict[str, dict]) -> str:
     return "\n".join(lines)
 
 
+# ตารางผลบน test แยกตามเงื่อนไขการถ่าย (เช่น แว่น/กลางคืน) ของ 1 ชุดข้อมูล
 def condition_table(scores: list[ClipScore], dataset: str, keys) -> str:
     by: dict[str, list[ClipScore]] = defaultdict(list)
     for s in scores:
@@ -144,6 +152,7 @@ def condition_table(scores: list[ClipScore], dataset: str, keys) -> str:
     return "\n".join(lines)
 
 
+# อัตราเตือนผิดบน test และเตือนถ้าค่าที่เสนอเกินเพดานที่ใช้ตอน tune
 def test_rates(scores: dict[str, list[ClipScore]], names: list[str]) -> tuple[str, list[str]]:
     """Alert rates on held-out non-drowsy/calm clips for every config, and warnings
     where the proposal breaks the tuning cap (defaults + slack) on the test split."""
@@ -175,6 +184,7 @@ def test_rates(scores: dict[str, list[ClipScore]], names: list[str]) -> tuple[st
     return "\n".join(lines), warnings
 
 
+# ค่าที่เลือกอยู่ขอบ grid: ค่าที่ดีกว่าอาจอยู่นอกช่วงที่ลอง
 def grid_edges(tuning: dict, base: dict[str, float]) -> list[str]:
     """Proposed values at the edge of their grid: the best value may lie beyond it."""
     out = []
@@ -189,6 +199,7 @@ def grid_edges(tuning: dict, base: dict[str, float]) -> list[str]:
     return out
 
 
+# ตารางสรุปการ tune แต่ละกลุ่ม: ค่าเริ่ม, ค่าที่เสนอ, คะแนน, อัตราเตือน
 def tuning_table(tuning: dict) -> str:
     lines = [
         "| Group | Objective (tune split) | Clips | Start | Proposed | Score "
@@ -213,6 +224,7 @@ def tuning_table(tuning: dict) -> str:
 # -- figures ---------------------------------------------------------------------------
 
 
+# รูปแบบกราฟให้เหมือนกันทุกรูป
 def _style(ax) -> None:
     for side in ("top", "right"):
         ax.spines[side].set_visible(False)
@@ -221,6 +233,7 @@ def _style(ax) -> None:
     ax.tick_params(colors=_INK2, labelsize=9)
 
 
+# กราฟผล grid search: 1 ค่า = กราฟเส้น, 2 ค่า = heatmap ของ objective
 def grid_figure(name: str, group: dict, path: Path) -> None:
     import matplotlib
 
@@ -284,6 +297,7 @@ def grid_figure(name: str, group: dict, path: Path) -> None:
     plt.close(fig)
 
 
+# กราฟ PERCLOS ของวิดีโอ UTA ตื่น vs ง่วง
 def uta_figure(scores: list[ClipScore], path: Path) -> None:
     import matplotlib
 
@@ -334,6 +348,8 @@ def uta_figure(scores: list[ClipScore], path: Path) -> None:
 # -- main ------------------------------------------------------------------------------
 
 
+# python -m eval.report: replay ทุกคลิปด้วย default, proposed และทีละค่าที่เปลี่ยน
+# แล้วเขียน m5-evaluation.md + รูป (มีแค่ตัวเลขรวม ไม่มีภาพหน้าหรือข้อมูลรายคน)
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--data", type=Path, default=Path("data"))

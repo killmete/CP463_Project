@@ -1,3 +1,4 @@
+# เทสต์ SoundSink ด้วยอุปกรณ์เสียงปลอม (ไม่มีเสียงจริงในเทสต์หรือ CI)
 """SoundSink with fake audio backends: no real audio in tests or CI."""
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ def decision(sound: SoundCue, t: float = 0.0) -> AlertDecision:
     return AlertDecision(t, DriverState.DROWSY_ALARM, AlertLevel.ALARM, "sleep", "x", True, sound)
 
 
+# อุปกรณ์เสียงปลอม: เก็บเสียงที่ถูกเล่นไว้ตรวจ
 class FakeBackend:
     def __init__(self, gate: threading.Event | None = None):
         self.calls: list[str] = []
@@ -34,6 +36,7 @@ class FakeBackend:
         self.calls.append("stop")
 
 
+# รูปแบบเสียงสั้น เป็น float32 และดังไม่เกิน volume
 def test_patterns_are_short_float32_and_within_volume():
     patterns = make_patterns(CFG.sample_rate, CFG.volume)
     for cue, data in patterns.items():
@@ -43,6 +46,7 @@ def test_patterns_are_short_float32_and_within_volume():
         assert abs(data[0]) < 1e-3 and abs(data[-1]) < 1e-3  # faded: no clicks
 
 
+# เสียงถึงอุปกรณ์ตามลำดับ
 def test_cues_reach_the_backend_in_order():
     backend = FakeBackend()
     sink = SoundSink(CFG, lambda: backend)
@@ -53,6 +57,7 @@ def test_cues_reach_the_backend_in_order():
     assert sink.available
 
 
+# อุปกรณ์ช้าไม่ทำให้ emit บล็อกลูปหลัก
 def test_emit_never_blocks_on_a_slow_device():
     gate = threading.Event()
     backend = FakeBackend(gate)
@@ -66,6 +71,7 @@ def test_emit_never_blocks_on_a_slow_device():
     assert len(backend.calls) <= 4  # the backlog was dropped, not queued up
 
 
+# ไม่มีอุปกรณ์เสียง -> ทำงานต่อแบบเงียบ
 def test_no_audio_device_falls_back_to_silent(caplog):
     def broken():
         raise OSError("PortAudio library not found")
@@ -78,6 +84,7 @@ def test_no_audio_device_falls_back_to_silent(caplog):
     assert caplog.text.count("audio unavailable") == 1
 
 
+# เล่นเสียงผิดพลาด ปิดเสียงและ log ครั้งเดียว
 def test_playback_error_disables_sound_once(caplog):
     class Failing(FakeBackend):
         def play(self, data, samplerate):
@@ -91,6 +98,7 @@ def test_playback_error_disables_sound_once(caplog):
     assert not sink.available and caplog.text.count("audio unavailable") == 1
 
 
+# webhook ส่งเฉพาะการเตือนที่มีเสียง
 def test_webhook_posts_only_sounded_alerts(monkeypatch):
     sent = []
     monkeypatch.setattr(WebhookSink, "post", lambda self, p: sent.append(p))
@@ -102,6 +110,7 @@ def test_webhook_posts_only_sounded_alerts(monkeypatch):
                      "level": "ALARM", "escalated": False}]  # fmt: skip
 
 
+# webhook เน็ตผิดพลาด แค่ log ไม่ทำให้โปรแกรมพัง
 def test_webhook_network_error_is_logged_not_raised(caplog):
     sink = WebhookSink("http://127.0.0.1:9/alerts", timeout_s=0.5)  # nothing listens there
     with caplog.at_level(logging.WARNING):

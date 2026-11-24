@@ -1,3 +1,4 @@
+# แพ็กเกจประเมินผล (M5): catalog -> extract -> labels -> replay -> metrics -> tune -> report
 """Milestone 5 evaluation: dataset catalog, feature extraction, labels, metrics, tuning.
 
 Run from the repository root, e.g. `python -m eval.extract --workers 10`.
